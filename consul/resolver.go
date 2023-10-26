@@ -13,8 +13,8 @@ var (
 	client *Client
 )
 
-// Init 初始化注册 resolver
-func Init(c *Client) {
+// InitResolver 初始化注册 resolver
+func InitResolver(c *Client) {
 	log.Info().Msg("consul init\n")
 	client = c
 	resolver.Register(NewBuilder())
