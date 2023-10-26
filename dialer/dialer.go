@@ -28,7 +28,7 @@ func WithTracer(tracer opentracing.Tracer) DialOption {
 func WithBalancer(client *consul.Client) DialOption {
 	return func(name string) (grpc.DialOption, error) {
 		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
-		consul.Init(client)
+		consul.InitResolver(client)
 		return grpc.WithBalancerName(roundrobin.Name), nil
 	}
 }
