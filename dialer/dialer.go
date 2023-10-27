@@ -34,6 +34,7 @@ func WithBalancer(client *consul.Client) DialOption {
 }
 
 // Dial 返回带有追踪拦截器的负载平衡的gRPC客户端连接
+// 传入的 name，可以是单独是目标服务名 svcName，也可以是 consul://consul/svcName 的格式
 func Dial(name string, opts ...DialOption) (*grpc.ClientConn, error) {
 	name = addSchemeIfNeeded(name, "consul")
 
@@ -66,10 +67,12 @@ func Dial(name string, opts ...DialOption) (*grpc.ClientConn, error) {
 }
 
 func addSchemeIfNeeded(target string, scheme string) string {
-	// 检查字符串是否已经以 scheme:// 开头
-	if !strings.HasPrefix(target, scheme+"://") {
-		// 如果不是，添加 scheme:// 前缀
-		target = scheme + "://" + target
+	// 标准字格式：scheme://authority/endpoint
+	// 检查字符串是否已经以 scheme://scheme 开头
+	prefix := scheme + "://" + scheme + "/"
+	if !strings.HasPrefix(target, prefix) {
+		// 如果不是，添加 scheme://scheme 前缀
+		target = prefix + target
 	}
 	return target
 }

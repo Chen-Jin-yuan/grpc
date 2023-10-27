@@ -38,7 +38,8 @@ func NewBuilder() resolver.Builder {
 }
 
 // Build 构建 resolver
-// 约定: 给 Dial 接口传递的 target 形式为 consul://svcName，在 DialContext 中被解析，consul 为 Scheme，svcName 为 Endpoint
+// 约定: 给 Dial 接口传递的 target 形式为 consul://consul/svcName，在 DialContext 中被解析，consul 为 Scheme，svcName 为 Endpoint
+// 注：给定的 target 需要满足形式为：scheme://authority/endpoint，最终传到该函数的是 target 是 endpoint
 func (cb *consulBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 
 	log.Info().Msg("calling consul build\n")
