@@ -44,6 +44,9 @@ func Dial(name string, opts ...DialOption) (*grpc.ClientConn, error) {
 		}),
 	}
 
+	//设置非安全连接
+	dialopts = append(dialopts, grpc.WithInsecure())
+
 	// 应用可选配置参数
 	for _, fn := range opts {
 		opt, err := fn(name)
