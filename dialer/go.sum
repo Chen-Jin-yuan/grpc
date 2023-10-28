@@ -3,6 +3,9 @@ github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03
 github.com/Chen-Jin-yuan/grpc/consul v1.0.0 h1:d1ctr3mBNI/7lGiXh1Z4ZtTjwNpiIffBnz5VcQFWxJI=
 github.com/Chen-Jin-yuan/grpc/consul v1.0.0/go.mod h1:ZRq2Lc3bOe+QT+K2IIhFfaMRzrfTPKoQKbVngmTL9Uw=
 github.com/Chen-Jin-yuan/grpc/consul v1.0.1/go.mod h1:ZRq2Lc3bOe+QT+K2IIhFfaMRzrfTPKoQKbVngmTL9Uw=
+github.com/Chen-Jin-yuan/grpc/consul v1.0.2/go.mod h1:ZRq2Lc3bOe+QT+K2IIhFfaMRzrfTPKoQKbVngmTL9Uw=
+github.com/Chen-Jin-yuan/grpc/consul v1.0.3 h1:OST1Vvz2twMKiL6QM7oSouwa24W0zW/9mW3OfghOeMc=
+github.com/Chen-Jin-yuan/grpc/consul v1.0.3/go.mod h1:ZRq2Lc3bOe+QT+K2IIhFfaMRzrfTPKoQKbVngmTL9Uw=
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
