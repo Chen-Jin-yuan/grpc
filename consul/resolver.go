@@ -109,7 +109,7 @@ func (cr *consulResolver) getInstances(lastIndex uint64) ([]resolver.Address, ui
 		// 使用 net.JoinHostPort() 函数将 IP 地址和端口号连接成完整的实例地址。
 		addr := net.JoinHostPort(s, strconv.Itoa(service.Service.Port))
 		// 将地址添加到实例切片中。
-		newAddrs = append(newAddrs, resolver.Address{Addr: addr})
+		newAddrs = append(newAddrs, resolver.Address{Addr: addr, ServerName: cr.svcName})
 	}
 
 	// 返回包含实例地址、Consul 返回的最新等待索引和无错误的结果。
