@@ -1,0 +1,71 @@
+{
+  "exam_svc": {
+    "group": {
+      "group1": {
+        "number": 3,
+        "selector": {
+          "request-type": "v1",
+          "method-type": "v1"
+        }
+      },
+      "group2": {
+        "number": 2,
+        "selector": {
+          "request-type": "v2",
+          "method-type": "v2"
+        }
+      },
+      "group3": {
+        "number": 2,
+        "selector": {
+          "request-type3": "v3",
+          "method-type3": "v3"
+        }
+      }
+    }
+  },
+  "service2": {
+    "group": {
+      "group1": {
+        "number": 3,
+        "selector": {
+          "request-type": "v1",
+          "method-type": "v1"
+        }
+      },
+      "group2": {
+        "number": 2,
+        "selector": {
+          "request-type": "v2",
+          "method-type": "v2"
+        }
+      },
+      "group3": {
+        "number": 2,
+        "selector": {
+          "request-type": "v3",
+          "method-type": "v3"
+        }
+      }
+    }
+  },
+  "exam_svc2": {
+    "group": {
+      "group1": {
+        "number": 3
+      },
+      "group2": {
+        "number": 2,
+        "selector": {
+        }
+      },
+      "group3": {
+        "number": 2,
+        "selector": {
+          "request-type": "v3",
+          "method-type": "v3"
+        }
+      }
+    }
+  }
+}
