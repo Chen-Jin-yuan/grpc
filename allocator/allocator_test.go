@@ -2,11 +2,13 @@ package allocator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"os"
 	"testing"
 )
 
@@ -19,6 +21,24 @@ func (*subC) UpdateAddresses([]resolver.Address) {
 }
 func (s *subC) Connect() {
 	fmt.Printf("select subConn id: %d\n", s.id)
+}
+
+func TestLoadConfig(t *testing.T) {
+	cis := []connInfo{
+		{addr: "1.0.0.1:1"},
+		{addr: "1.0.0.1:2"},
+		{addr: "1.0.0.1:3"},
+		{addr: "1.0.0.1:4"},
+		{addr: "1.0.0.1:5"},
+		{addr: "1.0.0.1:6"},
+		{addr: "1.0.0.1:7"},
+	}
+	s, err := loadConfig("./example_config.json", cis, "exam_svc")
+	if err != nil {
+
+	}
+	fmt.Println(len(s.Group["group1"].Weight))
+	fmt.Printf("config: %+v\n", s)
 }
 
 // 刚好符合 selector，此时选择相关分组
@@ -270,7 +290,7 @@ func TestNotMatchedSelectorWithoutNotGrouped(t *testing.T) {
 
 	pickInfo := balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 30; i++ {
 		res, err := p.Pick(pickInfo)
 		if err != nil {
 			fmt.Printf("Pick err: %v\n", err)
@@ -395,4 +415,94 @@ func TestWithoutSelector(t *testing.T) {
 		}
 		res.SubConn.Connect()
 	}
+}
+
+func TestNormalizeWeight(t *testing.T) {
+	input1 := []float64{}
+	input2 := []float64{-1.0, 2.0, 3.0}
+	input3 := []float64{0.2, 0.3}
+	input4 := []float64{0.1, 0.2, 0.3, 0.4, 0.5}
+	input5 := []float64{-0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}
+
+	number := 5
+
+	output1 := normalizeWeight(input1, number)
+	output2 := normalizeWeight(input2, number)
+	output3 := normalizeWeight(input3, number)
+	output4 := normalizeWeight(input4, number)
+	output5 := normalizeWeight(input5, number)
+
+	fmt.Println(output1)
+	fmt.Println(output2)
+	fmt.Println(output3)
+	fmt.Println(output4)
+	fmt.Println(output5)
+}
+
+func TestAppendWeight(t *testing.T) {
+	cis := []connInfo{
+		{addr: "1.0.0.1:1", weight: -1},
+		{addr: "1.0.0.1:2", weight: -1},
+		{addr: "1.0.0.1:3", weight: -1},
+		{addr: "1.0.0.1:4", weight: -1},
+		{addr: "1.0.0.1:5", weight: -1},
+		{addr: "1.0.0.1:6", weight: -1},
+		{addr: "1.0.0.1:7", weight: -1},
+		{addr: "1.0.0.1:8", weight: -1},
+	}
+	// 初始化 map
+	config := make(allocatorConfig)
+
+	// 返回相关服务的配置
+	var svcConfig serviceConfig
+	configPath := "./example_config.json"
+	svcName := "exam_svc"
+	// 读取JSON配置文件并解析
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+	}
+	if err = json.Unmarshal(data, &config); err != nil {
+	}
+	// 提取相关服务配置
+	svcConfig = config[svcName]
+
+	newAddr := addrAllocate(cis, &svcConfig)
+	fmt.Printf("before append weight, newAddr: %+v, cis: %+v\n", newAddr, cis)
+	appendWeightFirst(cis, newAddr, &svcConfig)
+	fmt.Printf("after append weight, newAddr: %+v, cis: %+v\n", newAddr, cis)
+	if err = writeGroupAddr(svcName+".json", newAddr); err != nil {
+	}
+
+}
+
+func TestAppendWeighForNewConn(t *testing.T) {
+	cis := []connInfo{
+		{addr: "1.0.0.1:1", weight: -1},
+		{addr: "1.0.0.2:2", weight: -1},
+		{addr: "1.0.0.2:3", weight: -1},
+		{addr: "1.0.0.1:4", weight: -1},
+		{addr: "1.0.0.2:5", weight: -1},
+		{addr: "1.0.0.1:6", weight: -1},
+		{addr: "1.0.0.1:8", weight: -1},
+		{addr: "1.0.0.1:9", weight: -1},
+	}
+	// 初始化 map
+	config := make(allocatorConfig)
+
+	// 返回相关服务的配置
+	var svcConfig serviceConfig
+	configPath := "./example_config.json"
+	svcName := "exam_svc"
+	// 读取JSON配置文件并解析
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+	}
+	if err = json.Unmarshal(data, &config); err != nil {
+	}
+	// 提取相关服务配置
+	svcConfig = config[svcName]
+
+	if err = parseAddr(cis, &svcConfig, svcName); err != nil {
+	}
+	fmt.Printf("parseAddr, cis: %+v\n", cis)
 }

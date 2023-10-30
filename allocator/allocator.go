@@ -46,7 +46,7 @@ func (pb *allocatorPickerBuilder) Build(info base.PickerBuildInfo) balancer.V2Pi
 			group:  "",
 			addr:   subConnInfo.Address.Addr,
 			load:   0,
-			weight: 0,
+			weight: -1,
 			index:  index,
 		})
 		index++
@@ -71,11 +71,14 @@ type connInfo struct {
 	group string
 	addr  string
 
-	/* load 用于负载均衡，每次选择最小 load 连接。weight 指定负载比例。一个连接使用一次后，load 更新为 load + 1 - weight
+	/* load 用于负载均衡，每次选择最小 load 连接。weight 指定负载比例。一个连接使用一次后，load 更新为 load + 1 / weight
 	 * weight 是一个百分比小数，同一组的 weight 之和是1
-	 * weight 默认是0，此时同分组的连接增长速度相同
-	 * 根据计算公式，假如一个分组两个连接，weight 分别是 0.2 和 0.8，那么 load 分别加 0.8 和 0.2，load 再次相同时发送的比例是 1：4
+	 * weight 默认是0，此时同分组的连接增长速度相同（初始化为-1，标记为未处理，但处理后默认是1）
+	 * 根据计算公式，假如一个分组两个连接，weight 分别是 0.2 和 0.8，那么 load 分别加 5 和 1.25，load 再次相同时发送的比例是 1：4
 	 * weight 不能大于1，需要归一化
+	 *
+	 * load 不需要写入文件，绑定到一个 ip 上。因为负载均衡是基于一段时间内已有副本来均衡，而不是基于整个历史的均衡
+	 * weight 需要写入文件，绑定到 ip，一个分组，固定好比例后可能会给不同副本不同资源，这些副本不应该改变比例
 	 */
 	load   float64
 	weight float64
@@ -190,9 +193,17 @@ func (p *allocatorPicker) pickOneConn(candidates []connInfo) balancer.SubConn {
 		}
 	}
 
-	// 更新 load，load += 1 * (1-weight)
+	// 更新 load，load += 1 / weight
 	// 获取目标在 connInfos 中的下标
 	index := candidates[minLoadIndex].index
-	p.connInfos[index].load += 1 - p.connInfos[index].weight
+
+	// 多一层判断，如果未初始化则默认为1。如果走到这层逻辑，则前面可能有错误
+	w := p.connInfos[index].weight
+	if w == -1 || w == 0 {
+		w = 1.0
+	}
+	// 这里用 0.1 / w，防止 load 增长太快溢出，但 float64 不太可能溢出
+	p.connInfos[index].load += 0.1 / w
+
 	return p.connInfos[index].sc
 }

@@ -32,9 +32,11 @@ type serviceConfig struct {
 type groupInfo struct {
 	Number   int               `json:"number"`
 	Selector map[string]string `json:"selector"`
+	Weight   []float64         `json:"weight"`
 }
 type groupAddresses struct {
-	Addresses []string `json:"addresses"`
+	Addresses []string           `json:"addresses"`
+	WeightMap map[string]float64 `json:"weight"`
 }
 
 type allocatorConfig map[string]serviceConfig
@@ -86,6 +88,7 @@ func parseAddr(cis []connInfo, sc *serviceConfig, svcName string) error {
 	_, err = os.Stat(fileName)
 	if os.IsNotExist(err) {
 		newAddr = addrAllocate(cis, sc)
+		appendWeightFirst(cis, newAddr, sc)
 		// 写入新数据
 		if err = writeGroupAddr(fileName, newAddr); err != nil {
 			log.Error().Msgf("writeGroupAddr %s, data: %v, error: %v", fileName, newAddr, err)
@@ -104,6 +107,9 @@ func parseAddr(cis []connInfo, sc *serviceConfig, svcName string) error {
 	// 匹配分析
 	newAddr = matchAddr(cis, oldAddr, sc)
 	log.Info().Msgf("matchAddr newAddr: %+v", newAddr)
+	// 添加权重
+	appendWeightForNewConn(cis, newAddr, sc)
+	log.Info().Msgf("after append weight newAddr: %+v", newAddr)
 	// 写回更新数据
 	if err = writeGroupAddr(fileName, newAddr); err != nil {
 		log.Error().Msgf("writeGroupAddr %s, data: %v, error: %v", fileName, newAddr, err)
@@ -163,13 +169,14 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 	// 放置更新的地址数据
 	newAddr := make(groupsAddresses)
 
-	// 1.匹配原有地址
+	// 1.匹配原有地址，原有地址的 weight 不变
 	// 遍历 Addresses 字段
 	for groupName, groupData := range *oldAddr {
 		// notGrouped 不匹配，等后面有剩余连接再分配
 		if groupName == defaultGroupName {
 			continue
 		}
+		weightMap := make(map[string]float64)
 		a := newAddr[groupName].Addresses
 		matched := 0
 
@@ -185,13 +192,15 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 					a = append(a, address)
 					// 更新 connInfo
 					cis[i].group = groupName
+					cis[i].weight = groupData.WeightMap[address]
+					weightMap[address] = cis[i].weight
 					// 匹配数加一
 					matched++
 					break
 				}
 			}
 		}
-		newAddr[groupName] = groupAddresses{Addresses: a}
+		newAddr[groupName] = groupAddresses{Addresses: a, WeightMap: weightMap}
 		missingCount[groupName] = 0 - matched
 	}
 
@@ -202,6 +211,7 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 
 	// 2.进行剩余连接分配，这些连接可能由于重启、崩溃、新加入等原因，使连接池地址改变。
 	// 这些连接只需要随机分配，如果剩余连接数不够，最后一个组（map 并不会排序）不会被满足
+	// 新分配的地址，weight 还未分配，需要后续处理
 	for groupName, miss := range missingCount {
 		a := newAddr[groupName].Addresses
 		for j := 0; j < miss; j++ {
@@ -217,7 +227,8 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 				break
 			}
 		}
-		newAddr[groupName] = groupAddresses{Addresses: a}
+		weightMap := newAddr[groupName].WeightMap
+		newAddr[groupName] = groupAddresses{Addresses: a, WeightMap: weightMap}
 	}
 
 	// 3.如果有多余的连接，这些连接没有所属的分组，默认为 notGrouped
