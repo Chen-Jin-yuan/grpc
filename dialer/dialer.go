@@ -27,7 +27,7 @@ func WithTracer(tracer opentracing.Tracer) DialOption {
 }
 
 // WithBalancer 启用客户端负载均衡，如果配置文件没有问题则
-func WithBalancer(client *consul.Client, configPath string) DialOption {
+func WithBalancer(client *consul.Client, configPath string, allocatorPort int) DialOption {
 	return func(name string) (grpc.DialOption, error) {
 		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
 		consul.InitResolver(client)
@@ -37,7 +37,7 @@ func WithBalancer(client *consul.Client, configPath string) DialOption {
 			return grpc.WithBalancerName(roundrobin.Name), nil
 		}
 		// 使用 allocator
-		allocator.Init(configPath)
+		allocator.Init(configPath, allocatorPort)
 		return grpc.WithBalancerName(allocator.Name), nil
 	}
 }
