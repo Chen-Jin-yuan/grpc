@@ -13,19 +13,22 @@ import (
 // Name is the name of allocator.
 const Name = "allocator"
 
+var firstStart = true
+
 // NewBuilder creates a new weight balancer builder.
 // HealthCheck 会使用服务端的健康检查来判断服务是否可用，如果服务端没有实现健康检查，则该配置不起作用
-func newBuilder(configPath string) balancer.Builder {
-	return base.NewBalancerBuilderV2(Name, &allocatorPickerBuilder{allocatorConfigPath: configPath},
-		base.Config{HealthCheck: true})
+func newBuilder(configPath string, httpServerPort int) balancer.Builder {
+	return base.NewBalancerBuilderV2(Name, &allocatorPickerBuilder{allocatorConfigPath: configPath,
+		allocatorPort: httpServerPort}, base.Config{HealthCheck: true})
 }
 
-func Init(configPath string) {
-	balancer.Register(newBuilder(configPath))
+func Init(configPath string, httpServerPort int) {
+	balancer.Register(newBuilder(configPath, httpServerPort))
 }
 
 type allocatorPickerBuilder struct {
 	allocatorConfigPath string
+	allocatorPort       int
 }
 
 func (pb *allocatorPickerBuilder) Build(info base.PickerBuildInfo) balancer.V2Picker {
@@ -59,6 +62,12 @@ func (pb *allocatorPickerBuilder) Build(info base.PickerBuildInfo) balancer.V2Pi
 		log.Error().Msgf("allocatorPicker loadConfig error: %v", err)
 	}
 	log.Info().Msgf("allocatorPicker load [%s] config: %+v", serviceName, svcConfig)
+
+	// 启动 http 服务器
+	if firstStart {
+		firstStart = false
+		go getSvcConfigByHttp(pb.allocatorPort)
+	}
 
 	return &allocatorPicker{
 		connInfos: cis,

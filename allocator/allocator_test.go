@@ -65,7 +65,7 @@ func TestRightMatchedSelector(t *testing.T) {
 	rdCs[&subC{id: 8}] = sci8
 	rdCs[&subC{id: 9}] = sci9
 
-	pb := allocatorPickerBuilder{"./example_config.json"}
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test right v1==================================")
@@ -138,7 +138,7 @@ func TestMatchedSelector(t *testing.T) {
 	rdCs[&subC{id: 8}] = sci8
 	rdCs[&subC{id: 9}] = sci9
 
-	pb := allocatorPickerBuilder{"./example_config.json"}
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test v1==================================")
@@ -181,7 +181,7 @@ func TestOverMatchedSelector(t *testing.T) {
 	rdCs[&subC{id: 8}] = sci8
 	rdCs[&subC{id: 9}] = sci9
 
-	pb := allocatorPickerBuilder{"./example_config.json"}
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test over diff field v1==================================")
@@ -242,7 +242,7 @@ func TestNotMatchedSelectorWithNotGrouped(t *testing.T) {
 	rdCs[&subC{id: 8}] = sci8
 	rdCs[&subC{id: 9}] = sci9
 
-	pb := allocatorPickerBuilder{"./example_config.json"}
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test none==================================")
@@ -281,7 +281,7 @@ func TestNotMatchedSelectorWithoutNotGrouped(t *testing.T) {
 	rdCs[&subC{id: 6}] = sci6
 	rdCs[&subC{id: 7}] = sci7
 
-	pb := allocatorPickerBuilder{"./example_config.json"}
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test none==================================")
@@ -324,7 +324,7 @@ func TestWithoutMetadata(t *testing.T) {
 	rdCs[&subC{id: 8}] = sci8
 	rdCs[&subC{id: 9}] = sci9
 
-	pb := allocatorPickerBuilder{"./example_config.json"}
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test without metadata==================================")
@@ -366,7 +366,7 @@ func TestWithoutSelector(t *testing.T) {
 	rdCs[&subC{id: 8}] = sci8
 	rdCs[&subC{id: 9}] = sci9
 
-	pb := allocatorPickerBuilder{"./example_config.json"}
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test without selector v1==================================")
@@ -505,4 +505,8 @@ func TestAppendWeighForNewConn(t *testing.T) {
 	if err = parseAddr(cis, &svcConfig, svcName); err != nil {
 	}
 	fmt.Printf("parseAddr, cis: %+v\n", cis)
+}
+
+func TestGetSvcConfigByHttp(t *testing.T) {
+	getSvcConfigByHttp(10001)
 }
