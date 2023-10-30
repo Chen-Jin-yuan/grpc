@@ -2,7 +2,9 @@ package dialer
 
 import (
 	"fmt"
+	"github.com/Chen-Jin-yuan/grpc/allocator"
 	"google.golang.org/grpc/balancer/roundrobin"
+	"os"
 	"strings"
 	"time"
 
@@ -24,8 +26,24 @@ func WithTracer(tracer opentracing.Tracer) DialOption {
 	}
 }
 
-// WithBalancer 启用客户端端负载均衡
-func WithBalancer(client *consul.Client) DialOption {
+// WithBalancer 启用客户端负载均衡，如果配置文件没有问题则
+func WithBalancer(client *consul.Client, configPath string) DialOption {
+	return func(name string) (grpc.DialOption, error) {
+		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
+		consul.InitResolver(client)
+		// 如果文件不存在，使用轮询策略
+		_, err := os.Stat(configPath)
+		if os.IsNotExist(err) {
+			return grpc.WithBalancerName(roundrobin.Name), nil
+		}
+		// 使用 allocator
+		allocator.Init(configPath)
+		return grpc.WithBalancerName(allocator.Name), nil
+	}
+}
+
+// WithBalancerRR 启用客户端负载均衡
+func WithBalancerRR(client *consul.Client) DialOption {
 	return func(name string) (grpc.DialOption, error) {
 		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
 		consul.InitResolver(client)

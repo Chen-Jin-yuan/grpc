@@ -42,6 +42,13 @@ type groupsAddresses map[string]groupAddresses
 
 // loadConfig 读取配置并将 connInfo 中连接分配到相关的分组
 func loadConfig(configPath string, cis []connInfo, serviceName string) (*serviceConfig, error) {
+	// 配置文件不存在
+	_, err := os.Stat(configPath)
+	if os.IsNotExist(err) {
+		log.Error().Msgf("cannot find file: %s", configPath)
+		return nil, err
+	}
+
 	// 初始化 map
 	config := make(allocatorConfig)
 
