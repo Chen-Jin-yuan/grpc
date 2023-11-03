@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"github.com/rs/zerolog/log"
 	"os"
+	"sort"
 )
 
 const defaultGroupName string = "notGrouped"
@@ -123,8 +124,20 @@ func addrAllocate(cis []connInfo, sc *serviceConfig) *groupsAddresses {
 	groupsAddr := make(groupsAddresses)
 	counter := 0
 
+	// 对 group 排序遍历 sc.Group，保证分配不是随机的
+	// cis 已经是排序过的
+	groupNames := make([]string, 0, len(sc.Group))
+	for groupName := range sc.Group {
+		groupNames = append(groupNames, groupName)
+	}
+
+	// 对键进行排序
+	sort.Strings(groupNames)
+
 	// 解析 group
-	for groupName, groupINfo := range sc.Group {
+	for _, groupName := range groupNames {
+		groupINfo := sc.Group[groupName]
+
 		// 一个 group 的地址放入 addr
 		var addr []string
 		for i := 0; i < groupINfo.Number; i++ {
@@ -171,7 +184,17 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 
 	// 1.匹配原有地址，原有地址的 weight 不变
 	// 遍历 Addresses 字段
-	for groupName, groupData := range *oldAddr {
+	// 按序遍历 group，这里按不按序都没影响，只是匹配而不会分配
+	groupNames := make([]string, 0, len(sc.Group))
+	for groupName := range sc.Group {
+		groupNames = append(groupNames, groupName)
+	}
+
+	// 对键进行排序
+	sort.Strings(groupNames)
+
+	for _, groupName := range groupNames {
+		groupData := (*oldAddr)[groupName]
 		// notGrouped 不匹配，等后面有剩余连接再分配
 		if groupName == defaultGroupName {
 			continue
@@ -212,7 +235,9 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 	// 2.进行剩余连接分配，这些连接可能由于重启、崩溃、新加入等原因，使连接池地址改变。
 	// 这些连接只需要随机分配，如果剩余连接数不够，最后一个组（map 并不会排序）不会被满足
 	// 新分配的地址，weight 还未分配，需要后续处理
-	for groupName, miss := range missingCount {
+	// 按序遍历，这里不按序会导致地址分配不确定
+	for _, groupName := range groupNames {
+		miss := missingCount[groupName]
 		a := newAddr[groupName].Addresses
 		for j := 0; j < miss; j++ {
 			for i := 0; i < len(cis); i++ {

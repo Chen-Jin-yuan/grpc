@@ -3,6 +3,7 @@ package allocator
 import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
+	"sort"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -41,7 +42,6 @@ func (pb *allocatorPickerBuilder) Build(info base.PickerBuildInfo) balancer.V2Pi
 	var cis []connInfo
 	var serviceName string
 	// 注：依赖于服务发现 resolver 把 ServiceName 写入 ServerName
-	index := 0
 	for subConn, subConnInfo := range info.ReadySCs {
 		serviceName = subConnInfo.Address.ServerName
 		cis = append(cis, connInfo{
@@ -50,9 +50,17 @@ func (pb *allocatorPickerBuilder) Build(info base.PickerBuildInfo) balancer.V2Pi
 			addr:   subConnInfo.Address.Addr,
 			load:   0,
 			weight: -1,
-			index:  index,
 		})
-		index++
+	}
+
+	// range 遍历 ReadySCs 是无序的，对于相同连接，cis 每次都不一样
+	// 为了让不同副本有一个相同的结果，需要对 cis 按 addr 排序
+	sort.Slice(cis, func(i, j int) bool {
+		return cis[i].addr < cis[j].addr
+	})
+
+	for i := range cis {
+		cis[i].index = i
 	}
 
 	log.Info().Msgf("allocatorPicker connInfo list: %+v", cis)
@@ -91,7 +99,9 @@ type connInfo struct {
 	 */
 	load   float64
 	weight float64
-	index  int
+
+	// 标记该连接在全局 cis 的下标，在最终选出候选者连接中的某一个时，要修改 cis 相应元素的 load
+	index int
 }
 
 type allocatorPicker struct {

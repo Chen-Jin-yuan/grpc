@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/metadata"
@@ -509,4 +510,93 @@ func TestAppendWeighForNewConn(t *testing.T) {
 
 func TestGetSvcConfigByHttp(t *testing.T) {
 	getSvcConfigByHttp(10001)
+}
+
+// 测试相同配置的不同副本，初次分配的连接是否一致（未添加排序遍历时，是不一致的）
+func TestOrderFirst(t *testing.T) {
+	cis := []connInfo{
+		{addr: "1.0.0.1:1", weight: -1},
+		{addr: "1.0.0.1:2", weight: -1},
+		{addr: "1.0.0.1:3", weight: -1},
+		{addr: "1.0.0.1:4", weight: -1},
+		{addr: "1.0.0.1:5", weight: -1},
+		{addr: "1.0.0.1:6", weight: -1},
+		{addr: "1.0.0.1:7", weight: -1},
+		{addr: "1.0.0.1:8", weight: -1},
+	}
+	for i := 0; i < 10; i++ {
+		// 初始化 map
+		config := make(allocatorConfig)
+
+		// 返回相关服务的配置
+		var svcConfig serviceConfig
+		configPath := "./example_config.json"
+		svcName := "exam_svc"
+		// 读取JSON配置文件并解析
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+		}
+		if err = json.Unmarshal(data, &config); err != nil {
+		}
+		// 提取相关服务配置
+		svcConfig = config[svcName]
+
+		newAddr := addrAllocate(cis, &svcConfig)
+		appendWeightFirst(cis, newAddr, &svcConfig)
+		fmt.Printf("newAddr: %+v, cis: %+v\n", newAddr, cis)
+		if err = writeGroupAddr(svcName+".json", newAddr); err != nil {
+		}
+	}
+
+}
+
+// 测试相同配置的不同副本，再次分配的连接是否一致（未添加排序遍历时，是不一致的）
+func TestOrderForNewConn(t *testing.T) {
+
+	// 初始化 map
+	config := make(allocatorConfig)
+
+	// 返回相关服务的配置
+	var svcConfig serviceConfig
+	configPath := "./example_config.json"
+	svcName := "exam_svc"
+
+	for i := 0; i < 10; i++ {
+		// 读取JSON配置文件并解析
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+		}
+		if err = json.Unmarshal(data, &config); err != nil {
+		}
+		// 提取相关服务配置
+		svcConfig = config[svcName]
+		fmt.Printf("==============================================================\n")
+		var oldAddr *groupsAddresses
+		var newAddr *groupsAddresses
+
+		cis := []connInfo{
+			{addr: "1.0.0.1:1", weight: -1},
+			{addr: "1.0.0.1:2", weight: -1},
+			{addr: "1.0.0.1:13", weight: -1},
+			{addr: "1.0.0.1:14", weight: -1},
+			{addr: "1.0.0.1:15", weight: -1},
+			{addr: "1.0.0.1:16", weight: -1},
+			{addr: "1.0.0.1:8", weight: -1},
+			{addr: "1.0.0.1:9", weight: -1},
+		}
+
+		// 需要读取旧数据做匹配分析
+		// 读取旧数据
+		fileName := svcName + ".json"
+		oldAddr, err = readGroupAddr(fileName)
+		if err != nil {
+			log.Error().Msgf("readGroupAddr %s error: %v", fileName, err)
+		}
+		//log.Info().Msgf("matchAddr oldAddr: %+v", oldAddr)
+		// 匹配分析
+		newAddr = matchAddr(cis, oldAddr, &svcConfig)
+		// 添加权重
+		appendWeightForNewConn(cis, newAddr, &svcConfig)
+		log.Info().Msgf("after append weight newAddr: %+v, cis: %+v", newAddr, cis)
+	}
 }

@@ -1,13 +1,17 @@
 package allocator
 
-import "math"
+import (
+	"math"
+)
 
 // cis、newAddr 均已分好组，需要配置权重
+// 注意：sc 是指针，遍历时对后续 weight 的修改会修改到 sc，要确保 sc 只用一次，后续会重新读取
 func appendWeightFirst(cis []connInfo, newAddr *groupsAddresses, sc *serviceConfig) {
 	weights := make(map[string][]float64)
 	// 配置 weightMap
 	groupAddrToWeight := make(map[string]map[string]float64)
 
+	// 不需要按序遍历，后续使用 map 只是做一个映射
 	for groupName, info := range sc.Group {
 		w := normalizeWeight(info.Weight, info.Number)
 		weights[groupName] = w
@@ -19,7 +23,7 @@ func appendWeightFirst(cis []connInfo, newAddr *groupsAddresses, sc *serviceConf
 		if cis[i].group == defaultGroupName {
 			cis[i].weight = 1
 		}
-		// 遍历该组的 weight，直接分配
+		// 遍历该组的 weight，直接分配。遍历权重切片是按序的
 		for j, weight := range weights[cis[i].group] {
 			if weight == -1 {
 				continue
@@ -39,11 +43,13 @@ func appendWeightFirst(cis []connInfo, newAddr *groupsAddresses, sc *serviceConf
 }
 
 // 对新连接进行分组
+// 注意：sc 是指针，遍历时对后续 weight 的修改会修改到 sc，要确保 sc 只用一次，后续会重新读取
 func appendWeightForNewConn(cis []connInfo, newAddr *groupsAddresses, sc *serviceConfig) {
 	weights := make(map[string][]float64)
 	// 配置 weightMap
 	groupAddrToWeight := make(map[string]map[string]float64)
 
+	// 不需要按序遍历，后续使用 map 只是做一个映射
 	for groupName, info := range sc.Group {
 		w := normalizeWeight(info.Weight, info.Number)
 		weights[groupName] = w
