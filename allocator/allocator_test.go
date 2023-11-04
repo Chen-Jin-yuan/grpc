@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"os"
 	"testing"
+	"time"
 )
 
 type subC struct {
@@ -508,8 +509,9 @@ func TestAppendWeighForNewConn(t *testing.T) {
 	fmt.Printf("parseAddr, cis: %+v\n", cis)
 }
 
-func TestGetSvcConfigByHttp(t *testing.T) {
-	getSvcConfigByHttp(10001)
+func TestHttp(t *testing.T) {
+	httpServerStart(10001)
+	time.Sleep(1e12)
 }
 
 // 测试相同配置的不同副本，初次分配的连接是否一致（未添加排序遍历时，是不一致的）
@@ -599,4 +601,91 @@ func TestOrderForNewConn(t *testing.T) {
 		appendWeightForNewConn(cis, newAddr, &svcConfig)
 		log.Info().Msgf("after append weight newAddr: %+v, cis: %+v", newAddr, cis)
 	}
+}
+
+// 测试计数器
+func TestCounter(t *testing.T) {
+
+	rdCs := make(map[balancer.SubConn]base.SubConnInfo)
+	sci1 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.1:1", ServerName: "exam_svc2"}}
+	sci2 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.2:1", ServerName: "exam_svc2"}}
+	sci3 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.3:1", ServerName: "exam_svc2"}}
+	sci4 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.4:1", ServerName: "exam_svc2"}}
+	sci5 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.5:1", ServerName: "exam_svc2"}}
+	sci6 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.6:1", ServerName: "exam_svc2"}}
+	sci7 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.7:1", ServerName: "exam_svc2"}}
+	sci8 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.8:1", ServerName: "exam_svc2"}}
+	sci9 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.9:1", ServerName: "exam_svc2"}}
+
+	rdCs[&subC{id: 1}] = sci1
+	rdCs[&subC{id: 2}] = sci2
+	rdCs[&subC{id: 3}] = sci3
+	rdCs[&subC{id: 4}] = sci4
+	rdCs[&subC{id: 5}] = sci5
+	rdCs[&subC{id: 6}] = sci6
+	rdCs[&subC{id: 7}] = sci7
+	rdCs[&subC{id: 8}] = sci8
+	rdCs[&subC{id: 9}] = sci9
+
+	pb := allocatorPickerBuilder{"./example_config.json", 10001}
+	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+
+	fmt.Println("==================================v1==================================")
+	md := metadata.Pairs("request-type", "v1", "method-type", "v1")
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	pickInfo := balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+
+	for i := 0; i < 20; i++ {
+		res, err := p.Pick(pickInfo)
+		if err != nil {
+			fmt.Printf("Pick err: %v\n", err)
+			return
+		}
+		res.SubConn.Connect()
+	}
+
+	fmt.Println("==================================v2==================================")
+	p = pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	md = metadata.Pairs("request-type", "v2", "method-type", "v2")
+	ctx = metadata.NewOutgoingContext(context.Background(), md)
+
+	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+
+	for i := 0; i < 5; i++ {
+		res, err := p.Pick(pickInfo)
+		if err != nil {
+			fmt.Printf("Pick err: %v\n", err)
+			return
+		}
+		res.SubConn.Connect()
+	}
+
+	fmt.Println("==================================v3==================================")
+	p = pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	md = metadata.Pairs("request-type", "v1", "method-type", "v3")
+	ctx = metadata.NewOutgoingContext(context.Background(), md)
+
+	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+
+	for i := 0; i < 10; i++ {
+		res, err := p.Pick(pickInfo)
+		if err != nil {
+			fmt.Printf("Pick err: %v\n", err)
+			return
+		}
+		res.SubConn.Connect()
+	}
+	if rcs == nil {
+		return
+	}
+	jsonData, err := rcs.ToJSON()
+	if err != nil {
+		fmt.Printf("err: %v\n", err)
+		return
+	}
+	fmt.Printf("counter json data: %v\n", jsonData)
+
+	// http查看
+	time.Sleep(1e12)
 }
