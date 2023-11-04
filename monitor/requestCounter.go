@@ -9,17 +9,16 @@ import (
 type RequestCounters struct {
 	// 读写互斥锁
 	mu       sync.RWMutex
-	counters map[interface{}]Counter
+	counters map[interface{}]*RequestCounter
 }
 
-// RequestCounter : *RequestCounter 实现 Counter 接口。这样获取一个 Counter 返回的就是引用
 type RequestCounter struct {
 	// 读写互斥锁
 	mu     sync.RWMutex
 	counts map[interface{}]int
 }
 
-func NewCounter() Counter {
+func NewCounter() *RequestCounter {
 	return &RequestCounter{
 		counts: make(map[interface{}]int),
 	}
@@ -47,13 +46,31 @@ func (rc *RequestCounter) GetData() map[interface{}]int {
 	return data
 }
 
+func (rc *RequestCounter) ToJSON() (map[string]int, error) {
+	data := rc.GetData()
+	jsonMap := make(map[string]int)
+
+	for key, value := range data {
+		switch k := key.(type) {
+		case string:
+			jsonMap[k] = value
+		case int:
+			jsonMap[strconv.Itoa(k)] = value
+		default:
+			return nil, fmt.Errorf("unsupported value key type: %T", key)
+		}
+	}
+
+	return jsonMap, nil
+}
+
 func NewRequestCounters() *RequestCounters {
 	return &RequestCounters{
-		counters: make(map[interface{}]Counter),
+		counters: make(map[interface{}]*RequestCounter),
 	}
 }
 
-func (rcs *RequestCounters) GetCounter(RequestKey interface{}) Counter {
+func (rcs *RequestCounters) GetCounter(RequestKey interface{}) *RequestCounter {
 	// 加写锁防止同时 NewCounter
 	rcs.mu.Lock()
 	defer rcs.mu.Unlock()

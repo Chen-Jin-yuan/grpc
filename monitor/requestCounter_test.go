@@ -36,6 +36,12 @@ func TestRequestCounter(t *testing.T) {
 		fmt.Printf("writeFile err: %v\n", err)
 		return
 	}
+
+	counter, err := rc.GetCounter("request-type").ToJSON()
+	if err != nil {
+		fmt.Printf("ToJSON err: %v\n", err)
+	}
+	fmt.Printf("counter data: %+v\n", counter)
 }
 func TestRequestCounterMultiThread(t *testing.T) {
 	var wg sync.WaitGroup
