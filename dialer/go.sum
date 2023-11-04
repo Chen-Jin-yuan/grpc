@@ -1,11 +1,11 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/Chen-Jin-yuan/grpc/allocator v1.0.0 h1:4BulIqy0RnKLwAlb2ScakJo9aryrpthQLJWWoGB6OrE=
-github.com/Chen-Jin-yuan/grpc/allocator v1.0.0/go.mod h1:/eMyH2i5DXu8h1GrOUXmlNeAg1JdxqWhEsPeTRIi+GY=
-github.com/Chen-Jin-yuan/grpc/allocator v1.0.1/go.mod h1:/eMyH2i5DXu8h1GrOUXmlNeAg1JdxqWhEsPeTRIi+GY=
-github.com/Chen-Jin-yuan/grpc/allocator v1.0.2/go.mod h1:/eMyH2i5DXu8h1GrOUXmlNeAg1JdxqWhEsPeTRIi+GY=
+github.com/Chen-Jin-yuan/grpc/allocator v1.0.3 h1:loXv3yv9e55wH3TLakXvHtDW1Lu2S6ZmMf70bWv5Su4=
+github.com/Chen-Jin-yuan/grpc/allocator v1.0.3/go.mod h1:DwInlMA/0mZP0a6yVZ16TWv/+yUr8Zm/PwxciqzxrXk=
 github.com/Chen-Jin-yuan/grpc/consul v1.0.3 h1:OST1Vvz2twMKiL6QM7oSouwa24W0zW/9mW3OfghOeMc=
 github.com/Chen-Jin-yuan/grpc/consul v1.0.3/go.mod h1:ZRq2Lc3bOe+QT+K2IIhFfaMRzrfTPKoQKbVngmTL9Uw=
+github.com/Chen-Jin-yuan/grpc/monitor v1.0.1 h1:TyVbyOm56/x3Rgmwgkes6q9YckZnp5B4YbNVfvo5LL0=
+github.com/Chen-Jin-yuan/grpc/monitor v1.0.1/go.mod h1:EJB3hJ8zAtHUH0RSTww609n90yQ7OBSzZIb57QZrAwM=
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
