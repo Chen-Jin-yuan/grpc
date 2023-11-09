@@ -604,88 +604,136 @@ func TestOrderForNewConn(t *testing.T) {
 }
 
 // 测试计数器
-func TestCounter(t *testing.T) {
+//func TestCounter(t *testing.T) {
+//
+//	rdCs := make(map[balancer.SubConn]base.SubConnInfo)
+//	sci1 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.1:1", ServerName: "exam_svc2"}}
+//	sci2 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.2:1", ServerName: "exam_svc2"}}
+//	sci3 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.3:1", ServerName: "exam_svc2"}}
+//	sci4 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.4:1", ServerName: "exam_svc2"}}
+//	sci5 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.5:1", ServerName: "exam_svc2"}}
+//	sci6 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.6:1", ServerName: "exam_svc2"}}
+//	sci7 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.7:1", ServerName: "exam_svc2"}}
+//	sci8 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.8:1", ServerName: "exam_svc2"}}
+//	sci9 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.9:1", ServerName: "exam_svc2"}}
+//
+//	rdCs[&subC{id: 1}] = sci1
+//	rdCs[&subC{id: 2}] = sci2
+//	rdCs[&subC{id: 3}] = sci3
+//	rdCs[&subC{id: 4}] = sci4
+//	rdCs[&subC{id: 5}] = sci5
+//	rdCs[&subC{id: 6}] = sci6
+//	rdCs[&subC{id: 7}] = sci7
+//	rdCs[&subC{id: 8}] = sci8
+//	rdCs[&subC{id: 9}] = sci9
+//
+//	pb := allocatorPickerBuilder{"./example_config.json", 10001}
+//	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+//
+//	fmt.Println("==================================v1==================================")
+//	md := metadata.Pairs("request-type", "v1", "method-type", "v1")
+//	ctx := metadata.NewOutgoingContext(context.Background(), md)
+//
+//	pickInfo := balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+//
+//	for i := 0; i < 20; i++ {
+//		res, err := p.Pick(pickInfo)
+//		if err != nil {
+//			fmt.Printf("Pick err: %v\n", err)
+//			return
+//		}
+//		res.SubConn.Connect()
+//	}
+//
+//	fmt.Println("==================================v2==================================")
+//	p = pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+//	md = metadata.Pairs("request-type", "v2", "method-type", "v2")
+//	ctx = metadata.NewOutgoingContext(context.Background(), md)
+//
+//	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+//
+//	for i := 0; i < 5; i++ {
+//		res, err := p.Pick(pickInfo)
+//		if err != nil {
+//			fmt.Printf("Pick err: %v\n", err)
+//			return
+//		}
+//		res.SubConn.Connect()
+//	}
+//
+//	fmt.Println("==================================v3==================================")
+//	p = pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+//	md = metadata.Pairs("request-type", "v1", "method-type", "v3")
+//	ctx = metadata.NewOutgoingContext(context.Background(), md)
+//
+//	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+//
+//	for i := 0; i < 10; i++ {
+//		res, err := p.Pick(pickInfo)
+//		if err != nil {
+//			fmt.Printf("Pick err: %v\n", err)
+//			return
+//		}
+//		res.SubConn.Connect()
+//	}
+//	if rcs == nil {
+//		return
+//	}
+//	jsonData, err := rcs.ToJSON()
+//	if err != nil {
+//		fmt.Printf("err: %v\n", err)
+//		return
+//	}
+//	fmt.Printf("counter json data: %v\n", jsonData)
+//
+//	// http查看
+//	time.Sleep(1e12)
+//}
+
+// 测试第一次获得所有连接时，强制重新分组
+func TestFirstAllocateAll(t *testing.T) {
 
 	rdCs := make(map[balancer.SubConn]base.SubConnInfo)
-	sci1 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.1:1", ServerName: "exam_svc2"}}
-	sci2 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.2:1", ServerName: "exam_svc2"}}
-	sci3 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.3:1", ServerName: "exam_svc2"}}
-	sci4 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.4:1", ServerName: "exam_svc2"}}
-	sci5 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.5:1", ServerName: "exam_svc2"}}
-	sci6 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.6:1", ServerName: "exam_svc2"}}
-	sci7 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.7:1", ServerName: "exam_svc2"}}
-	sci8 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.8:1", ServerName: "exam_svc2"}}
-	sci9 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.9:1", ServerName: "exam_svc2"}}
 
-	rdCs[&subC{id: 1}] = sci1
+	sci2 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.2:1", ServerName: "exam_svc"}}
+	sci3 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.3:1", ServerName: "exam_svc"}}
+
+	sci5 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.5:1", ServerName: "exam_svc"}}
+	sci6 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.6:1", ServerName: "exam_svc"}}
+	sci7 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.7:1", ServerName: "exam_svc"}}
+
+	subC3 := &subC{id: 3}
 	rdCs[&subC{id: 2}] = sci2
-	rdCs[&subC{id: 3}] = sci3
-	rdCs[&subC{id: 4}] = sci4
+	rdCs[subC3] = sci3
+
 	rdCs[&subC{id: 5}] = sci5
 	rdCs[&subC{id: 6}] = sci6
 	rdCs[&subC{id: 7}] = sci7
-	rdCs[&subC{id: 8}] = sci8
-	rdCs[&subC{id: 9}] = sci9
 
 	pb := allocatorPickerBuilder{"./example_config.json", 10001}
-	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	fmt.Println()
 
-	fmt.Println("==================================v1==================================")
-	md := metadata.Pairs("request-type", "v1", "method-type", "v1")
-	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	sci1 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.1:1", ServerName: "exam_svc"}}
+	sci4 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.4:1", ServerName: "exam_svc"}}
 
-	pickInfo := balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+	subC4 := &subC{id: 4}
 
-	for i := 0; i < 20; i++ {
-		res, err := p.Pick(pickInfo)
-		if err != nil {
-			fmt.Printf("Pick err: %v\n", err)
-			return
-		}
-		res.SubConn.Connect()
-	}
+	rdCs[&subC{id: 1}] = sci1
+	pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	fmt.Println()
 
-	fmt.Println("==================================v2==================================")
-	p = pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
-	md = metadata.Pairs("request-type", "v2", "method-type", "v2")
-	ctx = metadata.NewOutgoingContext(context.Background(), md)
+	rdCs[subC4] = sci4
+	pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	fmt.Println()
 
-	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
+	delete(rdCs, subC4)
+	delete(rdCs, subC3)
+	pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	fmt.Println()
 
-	for i := 0; i < 5; i++ {
-		res, err := p.Pick(pickInfo)
-		if err != nil {
-			fmt.Printf("Pick err: %v\n", err)
-			return
-		}
-		res.SubConn.Connect()
-	}
+	rdCs[subC3] = sci3
+	rdCs[subC4] = sci4
 
-	fmt.Println("==================================v3==================================")
-	p = pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
-	md = metadata.Pairs("request-type", "v1", "method-type", "v3")
-	ctx = metadata.NewOutgoingContext(context.Background(), md)
-
-	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
-
-	for i := 0; i < 10; i++ {
-		res, err := p.Pick(pickInfo)
-		if err != nil {
-			fmt.Printf("Pick err: %v\n", err)
-			return
-		}
-		res.SubConn.Connect()
-	}
-	if rcs == nil {
-		return
-	}
-	jsonData, err := rcs.ToJSON()
-	if err != nil {
-		fmt.Printf("err: %v\n", err)
-		return
-	}
-	fmt.Printf("counter json data: %v\n", jsonData)
-
-	// http查看
-	time.Sleep(1e12)
+	pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 }

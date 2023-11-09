@@ -85,9 +85,26 @@ func parseAddr(cis []connInfo, sc *serviceConfig, svcName string) error {
 	var newAddr *groupsAddresses
 	var err error
 
+	needConnNums := 0
+	for _, info := range sc.Group {
+		needConnNums += info.Number
+	}
+
 	// 如果文件不存在，说明是第一次配置，不需要与原来的分组匹配解析
+	// 为了使不同副本之间分组一致，第一次检测到连接数是预定个数时，强制按序分组一次
+	// 这是因为 grpc 检测到的连接数可能由于时序等原因，第一次可能只获得若干个下游可用连接，在排序条件下也会出现分配不一致
+	/*
+	 * 例如，有两个上游副本，四个下游副本，ip 为 1，2，3，4；分两组 group1 和 group2，每组两个连接
+	 * 	由于时序原因，两个上游副本第一次可能只检测到两个连接，并且可能不一样
+	 * 	上游副本1检测到 ip 1和2，分配到 group1；上游副本2检测到 ip 2和3，分配到group1。
+	 * 	因此在排序的条件下，也会出现分组不一致。
+	 * 这里的解决方式是，在第一次下游四个连接都 ready 了，强制重新分配一次。
+	 */
 	_, err = os.Stat(fileName)
-	if os.IsNotExist(err) {
+	if os.IsNotExist(err) || ((len(cis) == needConnNums) && firstAllocateAll) {
+		if (len(cis) == needConnNums) && firstAllocateAll {
+			firstAllocateAll = false
+		}
 		newAddr = addrAllocate(cis, sc)
 		appendWeightFirst(cis, newAddr, sc)
 		// 写入新数据

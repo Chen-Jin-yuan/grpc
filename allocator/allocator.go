@@ -6,7 +6,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Chen-Jin-yuan/grpc/monitor"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/grpclog"
@@ -16,7 +15,7 @@ import (
 const Name = "allocator"
 
 var firstStart = true
-var rcs *monitor.RequestCounters = nil
+var firstAllocateAll = true
 
 // NewBuilder creates a new weight balancer builder.
 // HealthCheck 会使用服务端的健康检查来判断服务是否可用，如果服务端没有实现健康检查，则该配置不起作用
@@ -132,8 +131,8 @@ func (p *allocatorPicker) Pick(pickInfo balancer.PickInfo) (balancer.PickResult,
 		}
 	}
 
-	// 计数器记录该次请求
-	countRequest(groupingField)
+	// 计数器记录该次请求，现在先不在这里实现计数
+	//countRequest(groupingField)
 
 	// 获取所有候选者连接
 	candidates := p.selectConn(groupingField)
@@ -233,13 +232,13 @@ func (p *allocatorPicker) pickOneConn(candidates []connInfo) balancer.SubConn {
 }
 
 // 一个请求的 metadata 中，每个 key 的每个 value 都会被记录一次
-func countRequest(groupingField map[string][]string) {
-	if rcs == nil {
-		rcs = monitor.NewRequestCounters()
-	}
-	for key, values := range groupingField {
-		for _, value := range values {
-			rcs.GetCounter(key).IncrementOfValue(value)
-		}
-	}
-}
+//func countRequest(groupingField map[string][]string) {
+//	if rcs == nil {
+//		rcs = monitor.NewRequestCounters()
+//	}
+//	for key, values := range groupingField {
+//		for _, value := range values {
+//			rcs.GetCounter(key).IncrementOfValue(value)
+//		}
+//	}
+//}

@@ -2,7 +2,6 @@ package allocator
 
 import (
 	"encoding/json"
-	"github.com/Chen-Jin-yuan/grpc/monitor"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
@@ -10,9 +9,10 @@ import (
 )
 
 // GET /svc-info?name=exam_svc
+// GET /counter?key=request-type
 func httpServerStart(port int) {
 	http.HandleFunc("/svc-info", getSvcConfig)
-	http.HandleFunc("/counter", getCounterInfo)
+	//http.HandleFunc("/counter", getCounterInfo)
 
 	log.Info().Msgf("Server is running on: %d", port)
 	err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
@@ -89,51 +89,51 @@ func getSvcConfig(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func getCounterInfo(w http.ResponseWriter, r *http.Request) {
-	if rcs == nil {
-		//w.Header().Set("Content-Type", "text/html")
-		//w.WriteHeader(http.StatusOK)
-		//_, _ = w.Write([]byte("The counter is not enabled or there are still no requests."))
-		//return
-		rcs = monitor.NewRequestCounters()
-	}
-	// 获取查询参数 key
-	key := r.URL.Query().Get("key")
-
-	// 如果 key 不为空，返回指定 key 的计数信息
-	if key != "" {
-		if counterData, err := rcs.GetCounter(key).ToJSON(); err == nil {
-			jsonData, err := json.Marshal(counterData)
-			if err != nil {
-				http.Error(w, "Error formatting JSON", http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, err = w.Write(jsonData)
-			if err != nil {
-				return
-			}
-		} else {
-			http.Error(w, "Key of Counter, to json error", http.StatusInternalServerError)
-		}
-	} else {
-		// 返回整个 counterMap
-		if allCountersData, err := rcs.ToJSON(); err == nil {
-			jsonData, err := json.Marshal(allCountersData)
-			if err != nil {
-				http.Error(w, "Error formatting JSON", http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_, err = w.Write(jsonData)
-			if err != nil {
-				return
-			}
-		} else {
-			http.Error(w, "all Counters, to json error", http.StatusInternalServerError)
-		}
-
-	}
-}
+//func getCounterInfo(w http.ResponseWriter, r *http.Request) {
+//	if rcs == nil {
+//		//w.Header().Set("Content-Type", "text/html")
+//		//w.WriteHeader(http.StatusOK)
+//		//_, _ = w.Write([]byte("The counter is not enabled or there are still no requests."))
+//		//return
+//		rcs = monitor.NewRequestCounters()
+//	}
+//	// 获取查询参数 key
+//	key := r.URL.Query().Get("key")
+//
+//	// 如果 key 不为空，返回指定 key 的计数信息
+//	if key != "" {
+//		if counterData, err := rcs.GetCounter(key).ToJSON(); err == nil {
+//			jsonData, err := json.Marshal(counterData)
+//			if err != nil {
+//				http.Error(w, "Error formatting JSON", http.StatusInternalServerError)
+//				return
+//			}
+//			w.Header().Set("Content-Type", "application/json")
+//			w.WriteHeader(http.StatusOK)
+//			_, err = w.Write(jsonData)
+//			if err != nil {
+//				return
+//			}
+//		} else {
+//			http.Error(w, "Key of Counter, to json error", http.StatusInternalServerError)
+//		}
+//	} else {
+//		// 返回整个 counterMap
+//		if allCountersData, err := rcs.ToJSON(); err == nil {
+//			jsonData, err := json.Marshal(allCountersData)
+//			if err != nil {
+//				http.Error(w, "Error formatting JSON", http.StatusInternalServerError)
+//				return
+//			}
+//			w.Header().Set("Content-Type", "application/json")
+//			w.WriteHeader(http.StatusOK)
+//			_, err = w.Write(jsonData)
+//			if err != nil {
+//				return
+//			}
+//		} else {
+//			http.Error(w, "all Counters, to json error", http.StatusInternalServerError)
+//		}
+//
+//	}
+//}
