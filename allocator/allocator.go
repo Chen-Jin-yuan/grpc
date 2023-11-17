@@ -2,13 +2,13 @@ package allocator
 
 import (
 	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc/metadata"
-	"sort"
-	"sync"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/metadata"
+	"math"
+	"sort"
+	"sync"
 )
 
 // Name is the name of allocator.
@@ -50,7 +50,7 @@ func (pb *allocatorPickerBuilder) Build(info base.PickerBuildInfo) balancer.V2Pi
 			group:  "",
 			addr:   subConnInfo.Address.Addr,
 			load:   0,
-			weight: -1,
+			weight: 1, // 这个版本不使用权重
 		})
 	}
 
@@ -59,7 +59,7 @@ func (pb *allocatorPickerBuilder) Build(info base.PickerBuildInfo) balancer.V2Pi
 	sort.Slice(cis, func(i, j int) bool {
 		return cis[i].addr < cis[j].addr
 	})
-
+	// addr 从小到大，index 也是从小到大的
 	for i := range cis {
 		cis[i].index = i
 	}
@@ -122,6 +122,7 @@ func (p *allocatorPicker) Pick(pickInfo balancer.PickInfo) (balancer.PickResult,
 	p.mu.Lock()
 	var groupingField = make(map[string][]string)
 	// 从 gRPC context 中提取 metadata
+	requestType := defaultRequestType
 	md, ok := metadata.FromOutgoingContext(pickInfo.Ctx)
 	if ok {
 		for key, values := range md {
@@ -129,24 +130,35 @@ func (p *allocatorPicker) Pick(pickInfo balancer.PickInfo) (balancer.PickResult,
 				groupingField[key] = append(groupingField[key], values...)
 			}
 		}
+		reqType := md.Get(mdRequestTypeKey)
+		if len(reqType) > 0 {
+			requestType = reqType[0]
+		}
 	}
 
 	// 计数器记录该次请求，现在先不在这里实现计数
 	//countRequest(groupingField)
 
 	// 获取所有候选者连接
-	candidates := p.selectConn(groupingField)
+	candidates, otherCandidates := p.selectConn(groupingField)
 	// 从候选者连接中，选择一个连接
-	sc := p.pickOneConn(candidates)
+	sc, ip := p.pickOneConn(candidates, otherCandidates)
+
+	rpcID := pickInfo.Ctx.Value(rpcIDKey).(uint64)
+	GetClientStatsHandler().setIdToIp(rpcID, ip)
+	GetClientStatsHandler().incWaitingRequests(ip, requestType)
 
 	p.mu.Unlock()
 	return balancer.PickResult{SubConn: sc}, nil
 }
 
 // selectConn 返回一组可选择的连接
-func (p *allocatorPicker) selectConn(groupingField map[string][]string) []connInfo {
+func (p *allocatorPicker) selectConn(groupingField map[string][]string) ([]connInfo, []connInfo) {
 	var candidates []connInfo
+	var otherCandidates []connInfo
+	// targetGroup 和 otherGroup 内的 group 都是乱序的
 	var targetGroup []string
+	var otherGroup []string
 	for groupName, info := range p.config.Group {
 		selector := true
 		// 只要 metadata 中设置的字段，能匹配完分组 selector 中的字段，就允许路由到这个分组
@@ -172,6 +184,8 @@ func (p *allocatorPicker) selectConn(groupingField map[string][]string) []connIn
 		}
 		if selector {
 			targetGroup = append(targetGroup, groupName)
+		} else {
+			otherGroup = append(otherGroup, groupName)
 		}
 	}
 	// 如果没有匹配，优先使用未分组的副本，未分组的副本服务未匹配的请求
@@ -179,18 +193,24 @@ func (p *allocatorPicker) selectConn(groupingField map[string][]string) []connIn
 	if len(targetGroup) == 0 {
 		targetGroup = append(targetGroup, defaultGroupName)
 	}
+	// 由于 targetGroup 是乱序的，所以 candidates 不是严格按序的
 	for _, groupName := range targetGroup {
 		candidates = append(candidates, p.getGroupConn(groupName)...)
 	}
+	// 为了借用资源，有机会选择其他分组的一个副本
+	for _, groupName := range otherGroup {
+		otherCandidates = append(otherCandidates, p.getGroupConn(groupName)...)
+	}
 	// 如果没有相关的连接，从所有连接里选择
 	if len(candidates) == 0 {
-		return p.connInfos
+		return p.connInfos, nil
 	}
 
-	return candidates
+	return candidates, otherCandidates
 }
 
 // getGroupConn 指定 groupName，获取分组的连接
+// 遍历切片，同组的连接是按序的（即 addr、index 从小到大）
 func (p *allocatorPicker) getGroupConn(groupName string) []connInfo {
 	var candidates []connInfo
 	for _, ci := range p.connInfos {
@@ -201,44 +221,99 @@ func (p *allocatorPicker) getGroupConn(groupName string) []connInfo {
 	return candidates
 }
 
-// pickOneConn 选择一个连接，挑选 load 最小的
-// 用轮询算法可能有问题，因为遍历 map 每次都是无序的，没有固定的顺序。因此同一种请求，返回的 candidates 列表也可能顺序不同
-func (p *allocatorPicker) pickOneConn(candidates []connInfo) balancer.SubConn {
-	// 初始化最小 load 和对应的元素下标
-	minLoad := candidates[0].load
-	minLoadIndex := 0
+// pickOneConn 选择一个连接，先排序，然后优先发满一个目标，再发满下一个
+// 优先发满定义：没有排队，且运行数最大
+func (p *allocatorPicker) pickOneConn(candidates []connInfo, otherCandidates []connInfo) (balancer.SubConn, string) {
+	var index int
+	// 1.如果本组有容器没到最大并发度，优先发满
+	index = findMaxRunningCountIndex(candidates)
+	// index != -1 说明有非阻塞的容器
+	if index != -1 {
+		return p.connInfos[index].sc, p.connInfos[index].addr
+	}
 
-	// 找到最小 load 和对应的下标
-	for i, info := range candidates {
-		if info.load < minLoad {
-			minLoad = info.load
-			minLoadIndex = i
+	// 2.如果本组的满了，其他组的没满，从其他组里选一个发送，借用资源。选择一个非阻塞且 running 数最少的
+	index = findMinRunningCountIndex(otherCandidates)
+	// index != -1 说明有非阻塞的容器
+	if index != -1 {
+		return p.connInfos[index].sc, p.connInfos[index].addr
+	}
+
+	// 3.如果都满了，在本组内选择排队数最少的目标发送
+	// 每个容器最大并发度可能不同，因此满载时 running 数可能不同，不能根据 running 数的大小来选择，可能会挤爆最大并发度最小的容器
+	index = findMinWaitingCountIndex(candidates)
+	return p.connInfos[index].sc, p.connInfos[index].addr
+}
+
+func findMinWaitingCountIndex(cis []connInfo) int {
+	// 初始化一个足够大的值作为初始最小值
+	minQueueCount := uint64(math.MaxUint64)
+	minIndex := 0
+
+	// 遍历 connInfo 切片
+	for i, ci := range cis {
+		// 获取当前元素的 waiting 数
+		queueCount := getWaitingCount(ci.addr)
+
+		// 更新最小值和最小值对应的 index
+		if queueCount < minQueueCount {
+			minQueueCount = queueCount
+			minIndex = cis[i].index
 		}
 	}
 
-	// 更新 load，load += 1 / weight
-	// 获取目标在 connInfos 中的下标
-	index := candidates[minLoadIndex].index
-
-	// 多一层判断，如果未初始化则默认为1。如果走到这层逻辑，则前面可能有错误
-	w := p.connInfos[index].weight
-	if w == -1 || w == 0 {
-		w = 1.0
-	}
-	// 这里用 0.1 / w，防止 load 增长太快溢出，但 float64 不太可能溢出
-	p.connInfos[index].load += 0.1 / w
-
-	return p.connInfos[index].sc
+	return minIndex
 }
 
-// 一个请求的 metadata 中，每个 key 的每个 value 都会被记录一次
-//func countRequest(groupingField map[string][]string) {
-//	if rcs == nil {
-//		rcs = monitor.NewRequestCounters()
-//	}
-//	for key, values := range groupingField {
-//		for _, value := range values {
-//			rcs.GetCounter(key).IncrementOfValue(value)
-//		}
-//	}
-//}
+// 借用其他组副本的资源时，选择非阻塞的且 running 数最小的那个
+func findMinRunningCountIndex(cis []connInfo) int {
+	// 初始化一个足够大的值作为初始最小值
+	minRunningCount := uint64(math.MaxUint64)
+	minIndex := -1
+
+	// 遍历 connInfo 切片
+	for i, ci := range cis {
+		// 阻塞了就跳过
+		if isBlocked(cis[i].addr) {
+			continue
+		}
+
+		// 获取当前元素的 running 数
+		runningCount := getRunningCount(ci.addr)
+
+		// 更新最小值和最小值对应的 index
+		if runningCount < minRunningCount {
+			minRunningCount = runningCount
+			minIndex = cis[i].index
+		}
+	}
+
+	return minIndex
+}
+
+// 找到最大运行数且非阻塞的目标
+func findMaxRunningCountIndex(cis []connInfo) int {
+	var maxRunningCount uint64
+	maxIndex := -1
+
+	// 遍历 connInfo 切片
+	for i, ci := range cis {
+		// 阻塞了就跳过
+		if isBlocked(cis[i].addr) {
+			continue
+		}
+
+		// 获取当前元素的 running 数
+		runningCount := getRunningCount(ci.addr)
+
+		// 数据初始化为第一个非阻塞的目标
+		if maxIndex == -1 {
+			maxRunningCount = runningCount
+			maxIndex = cis[i].index
+		} else if runningCount > maxRunningCount {
+			maxRunningCount = runningCount
+			maxIndex = cis[i].index
+		}
+	}
+	return maxIndex
+}

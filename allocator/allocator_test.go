@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"os"
+	"sort"
 	"testing"
 	"time"
 )
@@ -69,10 +70,12 @@ func TestRightMatchedSelector(t *testing.T) {
 
 	pb := allocatorPickerBuilder{"./example_config.json", 10001}
 	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+	p = pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
 
 	fmt.Println("==================================test right v1==================================")
 	md := metadata.Pairs("request-type", "v1", "method-type", "v1")
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
+	ctx = context.WithValue(ctx, rpcIDKey, uint64(1))
 
 	pickInfo := balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
 
@@ -88,6 +91,7 @@ func TestRightMatchedSelector(t *testing.T) {
 	fmt.Println("==================================test right v2==================================")
 	md = metadata.Pairs("request-type", "v2", "method-type", "v2")
 	ctx = metadata.NewOutgoingContext(context.Background(), md)
+	ctx = context.WithValue(ctx, rpcIDKey, uint64(1))
 
 	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
 
@@ -103,6 +107,7 @@ func TestRightMatchedSelector(t *testing.T) {
 	fmt.Println("==================================test right v3==================================")
 	md = metadata.Pairs("request-type3", "v3", "method-type3", "v3")
 	ctx = metadata.NewOutgoingContext(context.Background(), md)
+	ctx = context.WithValue(ctx, rpcIDKey, uint64(1))
 
 	pickInfo = balancer.PickInfo{FullMethodName: "hello", Ctx: ctx}
 
@@ -736,4 +741,90 @@ func TestFirstAllocateAll(t *testing.T) {
 	rdCs[subC4] = sci4
 
 	pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+}
+
+func TestGroupData(t *testing.T) {
+
+	// 构造数据
+	group := map[string][]int{
+		"exam_svc":  {1, 2, 3},
+		"exam_svc3": {4, 5, 6},
+	}
+
+	// 将数据编码为 JSON 字符串
+	jsonData, err := json.Marshal(group)
+	if err != nil {
+		fmt.Println("Error encoding JSON:", err)
+		return
+	}
+
+	// 上面是 post 端做的事情
+	// 下面是 server 做的事情
+
+	// 解析 JSON 数据
+	var groupData map[string][]int
+	if err := json.Unmarshal(jsonData, &groupData); err != nil {
+		fmt.Println("Error Unmarshal JSON:", err)
+	}
+	fmt.Printf("data: %s\n", jsonData)
+	fmt.Printf("map: %v\n", groupData)
+
+	cis := []connInfo{
+		{addr: "1.0.0.1:1"},
+		{addr: "1.0.0.1:2"},
+		{addr: "1.0.0.1:3"},
+		{addr: "1.0.0.1:4"},
+		{addr: "1.0.0.1:5"},
+		{addr: "1.0.0.1:6"},
+		{addr: "1.0.0.1:7"},
+	}
+	s, err := loadConfig("./example_config.json", cis, "exam_svc")
+	if err != nil {
+
+	}
+	fmt.Printf("config: %+v\n", s)
+
+	// 处理接收到的数据
+	configMu.Lock()
+	for svcName, numbers := range groupData {
+		_, ok := config[svcName]
+		if !ok {
+			// 这个服务不存在
+			continue
+		}
+		groupNames := make([]string, 0, len(config[svcName].Group))
+		for groupName := range config[svcName].Group {
+			groupNames = append(groupNames, groupName)
+		}
+		// 对 group 进行排序
+		sort.Strings(groupNames)
+
+		// 如果 numbers 长度小于组数，后面的组不会修改；反之多余的 numbers 不会被用到
+		minLen := min(len(numbers), len(groupNames))
+		for i := 0; i < minLen; i++ {
+			// config[svcName].Group[groupNames[i]].Number = numbers[i]
+			// serviceConfig 结构体是值类型，无法直接赋值，需要创建一个新的；groupInfo 也是这样
+			sc := config[svcName]
+			gi := sc.Group[groupNames[i]]
+			gi.Number = numbers[i]
+			// 重新赋值
+			sc.Group[groupNames[i]] = gi
+			config[svcName] = sc
+		}
+	}
+	configMu.Unlock()
+	cis = []connInfo{
+		{addr: "1.0.0.1:1"},
+		{addr: "1.0.0.1:4"},
+		{addr: "1.0.0.1:5"},
+		{addr: "1.0.0.1:6"},
+		{addr: "1.0.0.1:7"},
+		{addr: "1.0.0.1:8"},
+		{addr: "1.0.0.1:9"},
+	}
+	s, err = loadConfig("./example_config.json", cis, "exam_svc")
+	if err != nil {
+
+	}
+	fmt.Printf("config: %+v\n", s)
 }

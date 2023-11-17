@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"os"
 	"sort"
+	"sync"
 )
 
 const defaultGroupName string = "notGrouped"
@@ -43,35 +44,52 @@ type groupAddresses struct {
 type allocatorConfig map[string]serviceConfig
 type groupsAddresses map[string]groupAddresses
 
+// 将配置放在内存中
+var config allocatorConfig
+
+// 通过 api 修改 config，读写需要加锁。http server 会修改 config，多个建立不同下游服务的均衡器会读取 config
+var configMu sync.RWMutex
+
 // loadConfig 读取配置并将 connInfo 中连接分配到相关的分组
 func loadConfig(configPath string, cis []connInfo, serviceName string) (*serviceConfig, error) {
-	// 配置文件不存在
-	_, err := os.Stat(configPath)
-	if os.IsNotExist(err) {
-		log.Error().Msgf("cannot find file: %s", configPath)
-		return nil, err
-	}
-
-	// 初始化 map
-	config := make(allocatorConfig)
-
 	// 返回相关服务的配置
 	var svcConfig serviceConfig
 
-	// 读取JSON配置文件并解析
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		log.Error().Msgf("read %s error: %v", configPath, err)
-		return &svcConfig, err
-	}
-	if err := json.Unmarshal(data, &config); err != nil {
-		log.Error().Msgf("json unmarshal %s error: %v", configPath, err)
-		return &svcConfig, err
-	}
-	// 提取相关服务配置
-	svcConfig = config[serviceName]
+	// 第一次初始化，从配置文件读取
+	if config == nil {
 
-	if err = parseAddr(cis, &svcConfig, serviceName); err != nil {
+		log.Info().Msg("loading config from config file")
+		// 配置文件不存在
+		_, err := os.Stat(configPath)
+		if os.IsNotExist(err) {
+			log.Error().Msgf("cannot find file: %s", configPath)
+			return nil, err
+		}
+
+		// 初始化 map
+		config = make(allocatorConfig)
+
+		// 读取JSON配置文件并解析
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			log.Error().Msgf("read %s error: %v", configPath, err)
+			return &svcConfig, err
+		}
+
+		configMu.Lock()
+		if err := json.Unmarshal(data, &config); err != nil {
+			log.Error().Msgf("json unmarshal %s error: %v", configPath, err)
+			return &svcConfig, err
+		}
+		configMu.Unlock()
+	}
+
+	// 提取相关服务配置
+	configMu.RLock()
+	svcConfig = config[serviceName]
+	configMu.RUnlock()
+
+	if err := parseAddr(cis, &svcConfig, serviceName); err != nil {
 		log.Error().Msgf("parseAddr error: %v", err)
 		return &svcConfig, err
 	}
@@ -106,7 +124,7 @@ func parseAddr(cis []connInfo, sc *serviceConfig, svcName string) error {
 			firstAllocateAll = false
 		}
 		newAddr = addrAllocate(cis, sc)
-		appendWeightFirst(cis, newAddr, sc)
+		// appendWeightFirst(cis, newAddr, sc)
 		// 写入新数据
 		if err = writeGroupAddr(fileName, newAddr); err != nil {
 			log.Error().Msgf("writeGroupAddr %s, data: %v, error: %v", fileName, newAddr, err)
@@ -126,8 +144,8 @@ func parseAddr(cis []connInfo, sc *serviceConfig, svcName string) error {
 	newAddr = matchAddr(cis, oldAddr, sc)
 	log.Info().Msgf("matchAddr newAddr: %+v", newAddr)
 	// 添加权重
-	appendWeightForNewConn(cis, newAddr, sc)
-	log.Info().Msgf("after append weight newAddr: %+v", newAddr)
+	// appendWeightForNewConn(cis, newAddr, sc)
+	// log.Info().Msgf("after append weight newAddr: %+v", newAddr)
 	// 写回更新数据
 	if err = writeGroupAddr(fileName, newAddr); err != nil {
 		log.Error().Msgf("writeGroupAddr %s, data: %v, error: %v", fileName, newAddr, err)
@@ -216,7 +234,6 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 		if groupName == defaultGroupName {
 			continue
 		}
-		weightMap := make(map[string]float64)
 		a := newAddr[groupName].Addresses
 		matched := 0
 
@@ -232,15 +249,16 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 					a = append(a, address)
 					// 更新 connInfo
 					cis[i].group = groupName
-					cis[i].weight = groupData.WeightMap[address]
-					weightMap[address] = cis[i].weight
+					// cis[i].weight = groupData.WeightMap[address]
+					// weightMap[address] = cis[i].weight
 					// 匹配数加一
 					matched++
 					break
 				}
 			}
 		}
-		newAddr[groupName] = groupAddresses{Addresses: a, WeightMap: weightMap}
+		// newAddr[groupName] = groupAddresses{Addresses: a, WeightMap: weightMap}
+		newAddr[groupName] = groupAddresses{Addresses: a}
 		missingCount[groupName] = 0 - matched
 	}
 
@@ -269,8 +287,9 @@ func matchAddr(cis []connInfo, oldAddr *groupsAddresses, sc *serviceConfig) *gro
 				break
 			}
 		}
-		weightMap := newAddr[groupName].WeightMap
-		newAddr[groupName] = groupAddresses{Addresses: a, WeightMap: weightMap}
+		//weightMap := newAddr[groupName].WeightMap
+		//newAddr[groupName] = groupAddresses{Addresses: a, WeightMap: weightMap}
+		newAddr[groupName] = groupAddresses{Addresses: a}
 	}
 
 	// 3.如果有多余的连接，这些连接没有所属的分组，默认为 notGrouped
