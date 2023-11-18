@@ -192,6 +192,8 @@ func (p *allocatorPicker) selectConn(groupingField map[string][]string) ([]connI
 	// 这里也可以修改为：未分组的副本总会被加入选择列表，主要还是看需要怎么配置，是服务未匹配的请求，还是服务所有请求
 	if len(targetGroup) == 0 {
 		targetGroup = append(targetGroup, defaultGroupName)
+	} else {
+		otherGroup = append(otherGroup, defaultGroupName)
 	}
 	// 由于 targetGroup 是乱序的，所以 candidates 不是严格按序的
 	for _, groupName := range targetGroup {

@@ -1,1 +1,1 @@
-{"group1":{"addresses":["127.0.0.1:50000"],"weight":null},"group2":{"addresses":["127.0.0.1:50001"],"weight":null},"group3":{"addresses":null,"weight":null}}
+{"group1":{"addresses":["127.0.0.1:50000","127.0.0.1:50002"],"weight":null},"group2":{"addresses":["127.0.0.1:50001","127.0.0.1:50003"],"weight":null},"group3":{"addresses":null,"weight":null}}

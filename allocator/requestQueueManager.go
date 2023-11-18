@@ -13,7 +13,7 @@ const defaultRequestType = "default"
 const defaultTarget = "unknown"
 const mdRequestTypeKey = "request-type"
 const rpcIDKey = "rpc-id"
-const blockLen = 10
+const blockLen = 2
 
 type requestsCounter struct {
 	TypeCounter map[string]uint64 `json:"type_counter"`

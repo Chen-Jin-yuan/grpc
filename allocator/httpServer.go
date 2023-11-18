@@ -107,6 +107,11 @@ func getCounterInfo(w http.ResponseWriter, r *http.Request) {
 
 // groupData: svcName -> [group1 number, group2 number, ...]
 func modifyGroupNumber(w http.ResponseWriter, r *http.Request) {
+	if config == nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// 读取请求体
 	body, err := io.ReadAll(r.Body)
 	if err != nil {

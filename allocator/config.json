@@ -9,24 +9,25 @@
         "weight": [0.2, 0.8]
       },
       "group2": {
-        "number": 2,
+        "number": 1,
         "selector": {
-          "request-type": "v2"
+          "request-type": "v1"
         },
-        "weight": [0.3, 0.7]
+        "weight": [0.2, 0.8]
       },
       "group3": {
-        "number": 5,
+        "number": 2,
         "selector": {
-          "request-type": "v3"
-        }
+          "request-type": "v1"
+        },
+        "weight": [0.2, 0.8]
       }
     }
   },
   "service2": {
     "group": {
       "group1": {
-        "number": 3,
+        "number": 1,
         "selector": {
           "request-type": "v1",
           "method-type": "v1"

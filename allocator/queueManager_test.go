@@ -86,8 +86,11 @@ func initServer(rate int, maxStreams uint32) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	startServer(client, 50000, "50000", &wg, maxStreams, rate)
-	wg.Add(1)
 	startServer(client, 50001, "50001", &wg, maxStreams, rate)
+	time.Sleep(10e9)
+	wg.Add(1)
+	startServer(client, 50002, "50002", &wg, maxStreams, rate)
+	startServer(client, 50003, "50003", &wg, maxStreams, rate)
 	wg.Wait()
 }
 func startServer(client *consul.Client, port int, sid string, wg *sync.WaitGroup, maxStreams uint32, r int) {
