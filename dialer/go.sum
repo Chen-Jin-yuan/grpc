@@ -1,5 +1,6 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/Chen-Jin-yuan/grpc/allocator v0.0.1/go.mod h1:obiyhPfNeG/FMYiARYOLB68BanlvIsNEvMEPyGR2Yj4=
 github.com/Chen-Jin-yuan/grpc/allocator v1.0.4 h1:fR0SZ+80TfCLalC3xofObjunnP5abCOzQv55Kgzu/TU=
 github.com/Chen-Jin-yuan/grpc/allocator v1.0.4/go.mod h1:/eMyH2i5DXu8h1GrOUXmlNeAg1JdxqWhEsPeTRIi+GY=
 github.com/Chen-Jin-yuan/grpc/consul v1.0.3 h1:OST1Vvz2twMKiL6QM7oSouwa24W0zW/9mW3OfghOeMc=
