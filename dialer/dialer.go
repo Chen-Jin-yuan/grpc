@@ -53,7 +53,7 @@ func WithBalancerRR(client *consul.Client) DialOption {
 
 // Dial 返回带有追踪拦截器的负载平衡的gRPC客户端连接
 // 传入的 name，可以是单独是目标服务名 svcName，也可以是 consul://consul/svcName 的格式
-func Dial(name string, opts ...DialOption) (*grpc.ClientConn, error) {
+func Dial(name string, withHandler bool, opts ...DialOption) (*grpc.ClientConn, error) {
 	name = addSchemeIfNeeded(name, "consul")
 
 	dialopts := []grpc.DialOption{
@@ -65,7 +65,9 @@ func Dial(name string, opts ...DialOption) (*grpc.ClientConn, error) {
 
 	//设置非安全连接
 	dialopts = append(dialopts, grpc.WithInsecure())
-	dialopts = append(dialopts, grpc.WithStatsHandler(allocator.GetClientStatsHandler()))
+	if withHandler {
+		dialopts = append(dialopts, grpc.WithStatsHandler(allocator.GetClientStatsHandler()))
+	}
 
 	// 应用可选配置参数
 	for _, fn := range opts {
