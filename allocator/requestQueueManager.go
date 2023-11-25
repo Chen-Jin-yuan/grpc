@@ -20,26 +20,28 @@ type requestsCounter struct {
 	Total       uint64            `json:"total"`
 }
 
+//TODO: 如果某些请求超时失败了，会导致 waiting 和 running 不会执行递减，导致数量卡在那里
+
 // ClientStatsHandler 客户端 grpc 拦截器
 type ClientStatsHandler struct {
 	// handleRPC 无法知道是发给哪个 IP 的，因此使用 rpcID 去表示，需要加锁
-	rpcID              uint64
-	idToIp             map[uint64]string
-	totalBeginRequests map[string]uint64
+	rpcID            uint64
+	idToIp           map[uint64]string
+	outReadyRequests map[string]*requestsCounter
 	// target -> counter : requestType & total
 	// 是一个实时的数据
 	waitingRequests map[string]*requestsCounter
 	runningRequests map[string]*requestsCounter
 	// 互斥锁
-	rpcIDMu              sync.Mutex
-	idToIpMu             sync.Mutex
-	totalBeginRequestsMu sync.Mutex
-	waitingRequestsMu    sync.Mutex
-	runningRequestsMu    sync.Mutex
+	rpcIDMu            sync.Mutex
+	idToIpMu           sync.Mutex
+	outReadyRequestsMu sync.Mutex
+	waitingRequestsMu  sync.Mutex
+	runningRequestsMu  sync.Mutex
 }
 
 var clientStatsHandler = &ClientStatsHandler{idToIp: make(map[uint64]string),
-	totalBeginRequests: make(map[string]uint64), waitingRequests: make(map[string]*requestsCounter),
+	outReadyRequests: make(map[string]*requestsCounter), waitingRequests: make(map[string]*requestsCounter),
 	runningRequests: make(map[string]*requestsCounter)}
 
 func GetClientStatsHandler() *ClientStatsHandler {
@@ -72,19 +74,19 @@ func (h *ClientStatsHandler) setIdToIp(rpcID uint64, ip string) {
 	h.idToIpMu.Unlock()
 }
 
-func (h *ClientStatsHandler) getTotalBeginRequests(requestType string) uint64 {
-	h.totalBeginRequestsMu.Lock()
-	count, ok := h.totalBeginRequests[requestType]
-	h.totalBeginRequestsMu.Unlock()
-	if ok {
-		return count
+func (h *ClientStatsHandler) incOutReadyRequests(target string, requestType string) {
+	h.outReadyRequestsMu.Lock()
+	if counter, ok := h.outReadyRequests[target]; ok {
+		counter.Total++
+		counter.TypeCounter[requestType]++
+	} else {
+		// 如果不存在，创建内层 counter
+		counter = &requestsCounter{TypeCounter: make(map[string]uint64), Total: 0}
+		h.outReadyRequests[target] = counter
+		counter.Total++
+		counter.TypeCounter[requestType]++
 	}
-	return 0
-}
-func (h *ClientStatsHandler) incTotalBeginRequests(requestType string) {
-	h.totalBeginRequestsMu.Lock()
-	h.totalBeginRequests[requestType]++
-	h.totalBeginRequestsMu.Unlock()
+	h.outReadyRequestsMu.Unlock()
 }
 
 func (h *ClientStatsHandler) getTotalWaitingRequests(target string) uint64 {
@@ -207,21 +209,12 @@ func (h *ClientStatsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	// 如果服务端到达了最大并发数，那么会在 OutPayload 前阻塞（排队）
 
 	switch s.(type) {
-	case *stats.Begin:
-		requestType := defaultRequestType
-		// 从 gRPC context 中提取 metadata
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if ok {
-			reqType := md.Get(mdRequestTypeKey)
-			if len(reqType) > 0 {
-				requestType = reqType[0]
-			}
-		}
-		h.incTotalBeginRequests(requestType)
+	//case *stats.Begin:
+
 	//case *stats.End:
-	//	fmt.Println("handlerRPC End...")
+
 	//case *stats.InHeader:
-	//	fmt.Println("handlerRPC InHeader...")
+
 	case *stats.InPayload:
 		requestType := defaultRequestType
 		// 从 gRPC context 中提取 metadata
@@ -281,15 +274,19 @@ func (h *ClientStatsHandler) getJSONData() ([]byte, error) {
 	// 加锁
 	h.waitingRequestsMu.Lock()
 	h.runningRequestsMu.Lock()
+	h.outReadyRequestsMu.Lock()
 	defer h.waitingRequestsMu.Unlock()
 	defer h.runningRequestsMu.Unlock()
+	defer h.outReadyRequestsMu.Unlock()
 	// 将数据转换为 JSON
 	data := struct {
 		WaitingRequests map[string]*requestsCounter `json:"waiting_requests"`
-		RunningRequests map[string]*requestsCounter `json:"running_requests"`
+		RunningRequest  map[string]*requestsCounter `json:"running_requests"`
+		OutReadyRequest map[string]*requestsCounter `json:"out_ready_requests"`
 	}{
 		WaitingRequests: h.waitingRequests,
-		RunningRequests: h.runningRequests,
+		RunningRequest:  h.runningRequests,
+		OutReadyRequest: h.outReadyRequests,
 	}
 
 	jsonData, err := json.Marshal(data)

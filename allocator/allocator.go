@@ -147,6 +147,7 @@ func (p *allocatorPicker) Pick(pickInfo balancer.PickInfo) (balancer.PickResult,
 	rpcID := pickInfo.Ctx.Value(rpcIDKey).(uint64)
 	GetClientStatsHandler().setIdToIp(rpcID, ip)
 	GetClientStatsHandler().incWaitingRequests(ip, requestType)
+	GetClientStatsHandler().incOutReadyRequests(ip, requestType)
 
 	p.mu.Unlock()
 	return balancer.PickResult{SubConn: sc}, nil

@@ -20,17 +20,12 @@ import (
 )
 
 func TestCount(t *testing.T) {
-	go initServer(5e9, 1)
+	go initServer(5e9, 2)
 	time.Sleep(1e9)
 	go initClient(1e9)
 	time.Sleep(5e8)
-	target := "127.0.0.1:50000"
-	target2 := "127.0.0.1:50001"
+
 	for {
-		fmt.Printf("%s: running count: %d, waiting count: %d\n", target,
-			getRunningCount(target), getWaitingCount(target))
-		fmt.Printf("%s: running count: %d, waiting count: %d\n", target2,
-			getRunningCount(target2), getWaitingCount(target2))
 		jsonData, err := getHandlerJSONData()
 		if err != nil {
 			fmt.Printf("err: %v\n", err)
@@ -86,11 +81,6 @@ func initServer(rate int, maxStreams uint32) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	startServer(client, 50000, "50000", &wg, maxStreams, rate)
-	startServer(client, 50001, "50001", &wg, maxStreams, rate)
-	time.Sleep(10e9)
-	wg.Add(1)
-	startServer(client, 50002, "50002", &wg, maxStreams, rate)
-	startServer(client, 50003, "50003", &wg, maxStreams, rate)
 	wg.Wait()
 }
 func startServer(client *consul.Client, port int, sid string, wg *sync.WaitGroup, maxStreams uint32, r int) {
