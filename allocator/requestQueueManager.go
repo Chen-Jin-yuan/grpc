@@ -280,13 +280,13 @@ func (h *ClientStatsHandler) getJSONData() ([]byte, error) {
 	defer h.outReadyRequestsMu.Unlock()
 	// 将数据转换为 JSON
 	data := struct {
-		WaitingRequests map[string]*requestsCounter `json:"waiting_requests"`
-		RunningRequest  map[string]*requestsCounter `json:"running_requests"`
-		OutReadyRequest map[string]*requestsCounter `json:"out_ready_requests"`
+		WaitingRequests  map[string]*requestsCounter `json:"waiting_requests"`
+		RunningRequests  map[string]*requestsCounter `json:"running_requests"`
+		OutReadyRequests map[string]*requestsCounter `json:"out_ready_requests"`
 	}{
-		WaitingRequests: h.waitingRequests,
-		RunningRequest:  h.runningRequests,
-		OutReadyRequest: h.outReadyRequests,
+		WaitingRequests:  h.waitingRequests,
+		RunningRequests:  h.runningRequests,
+		OutReadyRequests: h.outReadyRequests,
 	}
 
 	jsonData, err := json.Marshal(data)
