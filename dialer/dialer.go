@@ -42,6 +42,21 @@ func WithBalancer(client *consul.Client, configPath string, allocatorPort int) D
 	}
 }
 
+func WithBalancerBF(client *consul.Client, configPath string, allocatorPort int) DialOption {
+	return func(name string) (grpc.DialOption, error) {
+		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
+		consul.InitResolver(client)
+		// 如果文件不存在，使用轮询策略
+		_, err := os.Stat(configPath)
+		if os.IsNotExist(err) {
+			return grpc.WithBalancerName(roundrobin.Name), nil
+		}
+		// 使用 allocator
+		allocator.InitBF(configPath, allocatorPort)
+		return grpc.WithBalancerName(allocator.NameBF), nil
+	}
+}
+
 // WithBalancerRR 启用客户端负载均衡
 func WithBalancerRR(client *consul.Client) DialOption {
 	return func(name string) (grpc.DialOption, error) {
@@ -51,9 +66,24 @@ func WithBalancerRR(client *consul.Client) DialOption {
 	}
 }
 
+// WithStatsHandler 返回客户端拦截器
+func WithStatsHandler() DialOption {
+	return func(name string) (grpc.DialOption, error) {
+		return grpc.WithStatsHandler(allocator.GetClientStatsHandler()), nil
+	}
+}
+
+// WithStatsHandlerBF 返回客户端拦截器
+func WithStatsHandlerBF() DialOption {
+	return func(name string) (grpc.DialOption, error) {
+		allocator.GetClientStatsHandler().SetIsCountFunc()
+		return grpc.WithStatsHandler(allocator.GetClientStatsHandler()), nil
+	}
+}
+
 // Dial 返回带有追踪拦截器的负载平衡的gRPC客户端连接
 // 传入的 name，可以是单独是目标服务名 svcName，也可以是 consul://consul/svcName 的格式
-func Dial(name string, withHandler bool, opts ...DialOption) (*grpc.ClientConn, error) {
+func Dial(name string, opts ...DialOption) (*grpc.ClientConn, error) {
 	name = addSchemeIfNeeded(name, "consul")
 
 	dialopts := []grpc.DialOption{
@@ -65,9 +95,6 @@ func Dial(name string, withHandler bool, opts ...DialOption) (*grpc.ClientConn, 
 
 	//设置非安全连接
 	dialopts = append(dialopts, grpc.WithInsecure())
-	if withHandler {
-		dialopts = append(dialopts, grpc.WithStatsHandler(allocator.GetClientStatsHandler()))
-	}
 
 	// 应用可选配置参数
 	for _, fn := range opts {
