@@ -10,10 +10,13 @@ import (
 )
 
 const defaultRequestType = "default"
+const defaultFunctionName = "defaultFunction"
 const defaultTarget = "unknown"
 const mdRequestTypeKey = "request-type"
+const functionTypeKey = "method"
 const rpcIDKey = "rpc-id"
-const blockLen = 2
+
+var blockLen uint64 = 2
 
 type requestsCounter struct {
 	TypeCounter map[string]uint64 `json:"type_counter"`
@@ -38,14 +41,23 @@ type ClientStatsHandler struct {
 	outReadyRequestsMu sync.Mutex
 	waitingRequestsMu  sync.Mutex
 	runningRequestsMu  sync.Mutex
+
+	// function 计数需要，只需要在拦截器中判断 isCountFunc，将计数 map 的 key 换成 function name
+	idToFuncName   map[uint64]string
+	idToFuncNameMu sync.Mutex
+	isCountFunc    bool
 }
 
 var clientStatsHandler = &ClientStatsHandler{idToIp: make(map[uint64]string),
 	outReadyRequests: make(map[string]*requestsCounter), waitingRequests: make(map[string]*requestsCounter),
-	runningRequests: make(map[string]*requestsCounter)}
+	runningRequests: make(map[string]*requestsCounter), idToFuncName: make(map[uint64]string), isCountFunc: false}
 
 func GetClientStatsHandler() *ClientStatsHandler {
 	return clientStatsHandler
+}
+
+func (h *ClientStatsHandler) SetIsCountFunc() {
+	h.isCountFunc = true
 }
 
 func (h *ClientStatsHandler) getIdToIp(rpcID uint64) string {
@@ -185,6 +197,32 @@ func (h *ClientStatsHandler) decRunningRequests(target string, requestType strin
 	h.runningRequestsMu.Unlock()
 }
 
+func (h *ClientStatsHandler) getIdToFuncName(rpcID uint64) string {
+	h.idToFuncNameMu.Lock()
+	defer h.idToFuncNameMu.Unlock()
+	functionName, ok := h.idToFuncName[rpcID]
+	if !ok {
+		functionName = defaultFunctionName
+	}
+	return functionName
+}
+func (h *ClientStatsHandler) getIdToFuncNameAndDelete(rpcID uint64) string {
+	h.idToFuncNameMu.Lock()
+	defer h.idToFuncNameMu.Unlock()
+	functionName, ok := h.idToFuncName[rpcID]
+	if !ok {
+		functionName = defaultFunctionName
+	} else {
+		delete(h.idToFuncName, rpcID)
+	}
+	return functionName
+}
+func (h *ClientStatsHandler) setIdToFuncName(rpcID uint64, functionName string) {
+	h.idToFuncNameMu.Lock()
+	h.idToFuncName[rpcID] = functionName
+	h.idToFuncNameMu.Unlock()
+}
+
 func (h *ClientStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }
@@ -216,38 +254,55 @@ func (h *ClientStatsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	//case *stats.InHeader:
 
 	case *stats.InPayload:
-		requestType := defaultRequestType
-		// 从 gRPC context 中提取 metadata
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if ok {
-			reqType := md.Get(mdRequestTypeKey)
-			if len(reqType) > 0 {
-				requestType = reqType[0]
+		if h.isCountFunc {
+			functionName := defaultFunctionName
+			rpcID := ctx.Value(rpcIDKey).(uint64)
+			target := h.getIdToIpAndDelete(rpcID)
+			functionName = h.getIdToFuncNameAndDelete(rpcID)
+			h.decRunningRequests(target, functionName)
+		} else {
+			requestType := defaultRequestType
+			// 从 gRPC context 中提取 metadata
+			md, ok := metadata.FromOutgoingContext(ctx)
+			if ok {
+				reqType := md.Get(mdRequestTypeKey)
+				if len(reqType) > 0 {
+					requestType = reqType[0]
+				}
 			}
+			rpcID := ctx.Value(rpcIDKey).(uint64)
+			target := h.getIdToIpAndDelete(rpcID)
+			h.decRunningRequests(target, requestType)
 		}
-		rpcID := ctx.Value(rpcIDKey).(uint64)
-		target := h.getIdToIpAndDelete(rpcID)
-		h.decRunningRequests(target, requestType)
 
 	//case *stats.InTrailer:
 	//	fmt.Println("handlerRPC InTrailer...")
 	//case *stats.OutHeader:
 	//	fmt.Println("handlerRPC OutHeader...")
 	case *stats.OutPayload:
-		requestType := defaultRequestType
-		// 从 gRPC context 中提取 metadata
-		md, ok := metadata.FromOutgoingContext(ctx)
-		if ok {
-			reqType := md.Get(mdRequestTypeKey)
-			if len(reqType) > 0 {
-				requestType = reqType[0]
+		if h.isCountFunc {
+			functionName := defaultFunctionName
+			rpcID := ctx.Value(rpcIDKey).(uint64)
+			target := h.getIdToIp(rpcID)
+			functionName = h.getIdToFuncName(rpcID)
+			h.decWaitingRequests(target, functionName)
+			h.incRunningRequests(target, functionName)
+		} else {
+			requestType := defaultRequestType
+			// 从 gRPC context 中提取 metadata
+			md, ok := metadata.FromOutgoingContext(ctx)
+			if ok {
+				reqType := md.Get(mdRequestTypeKey)
+				if len(reqType) > 0 {
+					requestType = reqType[0]
+				}
 			}
-		}
 
-		rpcID := ctx.Value(rpcIDKey).(uint64)
-		target := h.getIdToIp(rpcID)
-		h.decWaitingRequests(target, requestType)
-		h.incRunningRequests(target, requestType)
+			rpcID := ctx.Value(rpcIDKey).(uint64)
+			target := h.getIdToIp(rpcID)
+			h.decWaitingRequests(target, requestType)
+			h.incRunningRequests(target, requestType)
+		}
 	}
 }
 

@@ -16,6 +16,7 @@ func httpServerStart(port int) {
 	http.HandleFunc("/svc-info", getSvcConfig)
 	http.HandleFunc("/counter", getCounterInfo)
 	http.HandleFunc("/modify-group", modifyGroupNumber)
+	http.HandleFunc("/modify-block-len", modifyBlockLen)
 
 	log.Info().Msgf("Server is running on: %d", port)
 	err := http.ListenAndServe(":"+strconv.Itoa(port), nil)
@@ -155,6 +156,28 @@ func modifyGroupNumber(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	configMu.Unlock()
+	// 返回响应
+	w.WriteHeader(http.StatusOK)
+}
+
+// 修改排队阈值，用于实验中更方便地测试合适的阈值
+func modifyBlockLen(w http.ResponseWriter, r *http.Request) {
+	// 读取请求体
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body", http.StatusBadRequest)
+		return
+	}
+
+	// 解析 JSON 数据
+	var bLen uint64
+	if err := json.Unmarshal(body, &bLen); err != nil {
+		http.Error(w, "Error decoding JSON", http.StatusBadRequest)
+		return
+	}
+
+	blockLen = bLen
+
 	// 返回响应
 	w.WriteHeader(http.StatusOK)
 }

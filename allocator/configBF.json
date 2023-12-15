@@ -4,23 +4,14 @@
       "group1": {
         "number": 2,
         "selector": {
-          "request-type": "v1"
-        },
-        "weight": [0.2, 0.8]
+          "method": "SayHello"
+        }
       },
       "group2": {
         "number": 2,
         "selector": {
-          "request-type": "v2"
-        },
-        "weight": [0.2, 0.8]
-      },
-      "group3": {
-        "number": 2,
-        "selector": {
-          "request-type": "v1"
-        },
-        "weight": [0.2, 0.8]
+          "method": "SayHelloAgain"
+        }
       }
     }
   },

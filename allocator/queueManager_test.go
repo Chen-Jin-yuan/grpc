@@ -22,7 +22,7 @@ import (
 func TestCount(t *testing.T) {
 	go initServer(5e9, 2)
 	time.Sleep(1e9)
-	go initClient(1e9)
+	go initClient(5e8)
 	time.Sleep(5e8)
 
 	for {
@@ -46,7 +46,8 @@ func initClient(rate int) {
 	conn, err := Dial(
 		svcname,
 		// 路径从项目根路径开始，
-		WithBalancer(consulClient, "config.json", 10001),
+		WithBalancerBF(consulClient, "configBF.json", 10001),
+		WithStatsHandlerBF(),
 	)
 	//conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
@@ -60,6 +61,9 @@ func initClient(rate int) {
 		md := metadata.Pairs("request-type", "v1")
 		ctx := metadata.NewOutgoingContext(context.Background(), md)
 		go hello(&c, ctx, id)
+		md = metadata.Pairs("request-type", "v1")
+		ctx = metadata.NewOutgoingContext(context.Background(), md)
+		go helloAgain(&c, ctx, id)
 		id += 1
 		time.Sleep(time.Duration(rate))
 	}
@@ -72,6 +76,14 @@ func hello(c *pb.GreeterClient, ctx context.Context, id int) {
 	log.Printf("Greeting: %s", r1.GetMessage())
 }
 
+func helloAgain(c *pb.GreeterClient, ctx context.Context, id int) {
+	r2, err := (*c).SayHelloAgain(ctx, &pb.HelloAgainRequest{Name: strconv.Itoa(id), Number: 1})
+	if err != nil {
+		log.Fatalf("could not greet: %v", err)
+	}
+	log.Printf("Greeting: %s", r2.GetMessage())
+}
+
 func initServer(rate int, maxStreams uint32) {
 	consulAddr := "127.0.0.1:8500"
 	client, err := consul.NewClient(consulAddr)
@@ -79,8 +91,11 @@ func initServer(rate int, maxStreams uint32) {
 		log.Fatalf("Got error while initializing Consul agent: %v", err)
 	}
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
 	startServer(client, 50000, "50000", &wg, maxStreams, rate)
+	startServer(client, 50001, "50001", &wg, maxStreams, rate)
+	startServer(client, 50002, "50002", &wg, maxStreams, rate)
+	startServer(client, 50003, "50003", &wg, maxStreams, rate)
 	wg.Wait()
 }
 func startServer(client *consul.Client, port int, sid string, wg *sync.WaitGroup, maxStreams uint32, r int) {
@@ -122,11 +137,17 @@ func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloRe
 	return &pb.HelloReply{Message: "Hello " + s.id + " " + in.GetName()}, nil
 }
 
+// SayHelloAgain implements helloworld.GreeterServer
+func (s *server) SayHelloAgain(ctx context.Context, in *pb.HelloAgainRequest) (*pb.HelloAgainReply, error) {
+	//time.Sleep(time.Duration(s.rate))
+	return &pb.HelloAgainReply{Message: "Hello again " + s.id + " " + in.GetName(), DoubleNumber: in.GetNumber() * 2}, nil
+}
+
 // -------------------------------------------------------------------------------------------------------------------
 // DialOption 允许配置拨号器的可选参数
 type DialOption func(name string) (grpc.DialOption, error)
 
-// WithBalancer 启用客户端负载均衡，如果配置文件没有问题则
+// WithBalancer 启用客户端负载均衡
 func WithBalancer(client *consul.Client, configPath string, allocatorPort int) DialOption {
 	return func(name string) (grpc.DialOption, error) {
 		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
@@ -142,12 +163,42 @@ func WithBalancer(client *consul.Client, configPath string, allocatorPort int) D
 	}
 }
 
+func WithBalancerBF(client *consul.Client, configPath string, allocatorPort int) DialOption {
+	return func(name string) (grpc.DialOption, error) {
+		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
+		consul.InitResolver(client)
+		// 如果文件不存在，使用轮询策略
+		_, err := os.Stat(configPath)
+		if os.IsNotExist(err) {
+			return grpc.WithBalancerName(roundrobin.Name), nil
+		}
+		// 使用 allocator
+		InitBF(configPath, allocatorPort)
+		return grpc.WithBalancerName(NameBF), nil
+	}
+}
+
 // WithBalancerRR 启用客户端负载均衡
 func WithBalancerRR(client *consul.Client) DialOption {
 	return func(name string) (grpc.DialOption, error) {
 		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
 		consul.InitResolver(client)
 		return grpc.WithBalancerName(roundrobin.Name), nil
+	}
+}
+
+// WithStatsHandler 返回客户端拦截器
+func WithStatsHandler() DialOption {
+	return func(name string) (grpc.DialOption, error) {
+		return grpc.WithStatsHandler(GetClientStatsHandler()), nil
+	}
+}
+
+// WithStatsHandlerBF 返回客户端拦截器
+func WithStatsHandlerBF() DialOption {
+	return func(name string) (grpc.DialOption, error) {
+		GetClientStatsHandler().SetIsCountFunc()
+		return grpc.WithStatsHandler(GetClientStatsHandler()), nil
 	}
 }
 
@@ -165,7 +216,6 @@ func Dial(name string, opts ...DialOption) (*grpc.ClientConn, error) {
 
 	//设置非安全连接
 	dialopts = append(dialopts, grpc.WithInsecure())
-	dialopts = append(dialopts, grpc.WithStatsHandler(GetClientStatsHandler()))
 	// 应用可选配置参数
 	for _, fn := range opts {
 		opt, err := fn(name)

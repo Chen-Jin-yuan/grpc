@@ -828,3 +828,48 @@ func TestGroupData(t *testing.T) {
 	}
 	fmt.Printf("config: %+v\n", s)
 }
+
+func TestBFSelector(t *testing.T) {
+	rdCs := make(map[balancer.SubConn]base.SubConnInfo)
+	sci1 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.1:1", ServerName: "helloServer"}}
+	sci2 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.2:1", ServerName: "helloServer"}}
+	sci3 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.3:1", ServerName: "helloServer"}}
+	sci4 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.4:1", ServerName: "helloServer"}}
+	sci5 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.5:1", ServerName: "helloServer"}}
+	sci6 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.6:1", ServerName: "helloServer"}}
+	sci7 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.7:1", ServerName: "helloServer"}}
+	sci8 := base.SubConnInfo{Address: resolver.Address{Addr: "1.0.0.8:1", ServerName: "helloServer"}}
+
+	rdCs[&subC{id: 1}] = sci1
+	rdCs[&subC{id: 2}] = sci2
+	rdCs[&subC{id: 3}] = sci3
+	rdCs[&subC{id: 4}] = sci4
+	rdCs[&subC{id: 5}] = sci5
+	rdCs[&subC{id: 6}] = sci6
+	rdCs[&subC{id: 7}] = sci7
+	rdCs[&subC{id: 8}] = sci8
+
+	pb := allocatorBFPickerBuilder{"./configBF.json", 10001}
+	p := pb.Build(base.PickerBuildInfo{ReadySCs: rdCs})
+
+	ctx := context.WithValue(context.Background(), rpcIDKey, uint64(1))
+
+	pickInfo := []balancer.PickInfo{{FullMethodName: "/helloworld.Greeter/SayHello", Ctx: ctx},
+		{FullMethodName: "/helloworld.Greeter/SayHelloAgain", Ctx: ctx}}
+
+	for i := 0; i < 24; i++ {
+		res, err := p.Pick(pickInfo[i%2])
+		if err != nil {
+			fmt.Printf("Pick err: %v\n", err)
+			return
+		}
+		jsonData, err := getHandlerJSONData()
+		if err != nil {
+			fmt.Printf("err: %v\n", err)
+		} else {
+			fmt.Printf("jsonData: %s\n", jsonData)
+		}
+		res.SubConn.Connect()
+		fmt.Println()
+	}
+}
