@@ -16,7 +16,7 @@ const mdRequestTypeKey = "request-type"
 const functionTypeKey = "method"
 const rpcIDKey = "rpc-id"
 
-var blockLen uint64 = 2
+var blockLen uint64 = 5
 
 type requestsCounter struct {
 	TypeCounter map[string]uint64 `json:"type_counter"`
