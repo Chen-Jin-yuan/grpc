@@ -22,7 +22,7 @@ import (
 func TestCount(t *testing.T) {
 	go initServer(5e9, 2)
 	time.Sleep(1e9)
-	go initClient(5e8)
+	go initClient(1e9)
 	time.Sleep(5e8)
 
 	for {
@@ -46,8 +46,8 @@ func initClient(rate int) {
 	conn, err := Dial(
 		svcname,
 		// 路径从项目根路径开始，
-		WithBalancerBF(consulClient, "configBF.json", 10001),
-		WithStatsHandlerBF(),
+		WithBalancer(consulClient, "config.json", 10001),
+		WithStatsHandler(),
 	)
 	//conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
@@ -58,10 +58,10 @@ func initClient(rate int) {
 	time.Sleep(1e9)
 	id := 0
 	for {
-		md := metadata.Pairs("request-type", "v1")
+		md := metadata.Pairs("request-type", "hello1")
 		ctx := metadata.NewOutgoingContext(context.Background(), md)
 		go hello(&c, ctx, id)
-		md = metadata.Pairs("request-type", "v1")
+		md = metadata.Pairs("request-type", "helloAgain2")
 		ctx = metadata.NewOutgoingContext(context.Background(), md)
 		go helloAgain(&c, ctx, id)
 		id += 1

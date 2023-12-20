@@ -146,6 +146,8 @@ func (p *allocatorPicker) Pick(pickInfo balancer.PickInfo) (balancer.PickResult,
 	GetClientStatsHandler().setIdToIp(rpcID, ip)
 	GetClientStatsHandler().incWaitingRequests(ip, requestType)
 	GetClientStatsHandler().incOutReadyRequests(ip, requestType)
+	// requestType 总数计数，key 为 all
+	GetClientStatsHandler().incOutReadyRequests("all", requestType)
 
 	p.mu.Unlock()
 	return balancer.PickResult{SubConn: sc}, nil
