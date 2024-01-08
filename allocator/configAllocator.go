@@ -120,9 +120,9 @@ func parseAddr(cis []connInfo, sc *serviceConfig, svcName string) error {
 	 */
 	_, err = os.Stat(fileName)
 	if os.IsNotExist(err) || ((len(cis) == needConnNums) && firstAllocateAll) {
-		if (len(cis) == needConnNums) && firstAllocateAll {
-			firstAllocateAll = false
-		}
+		//if (len(cis) == needConnNums) && firstAllocateAll {
+		//	firstAllocateAll = false
+		//}
 		newAddr = addrAllocate(cis, sc)
 		// appendWeightFirst(cis, newAddr, sc)
 		// 写入新数据
