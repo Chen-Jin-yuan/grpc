@@ -138,9 +138,9 @@ func (p *allocatorPicker) Pick(pickInfo balancer.PickInfo) (balancer.PickResult,
 	}
 
 	// 获取所有候选者连接
-	candidates, otherCandidates := p.selectConn(groupingField)
+	candidates, _ := p.selectConn(groupingField)
 	// 从候选者连接中，选择一个连接
-	sc, ip := p.pickOneConn(candidates, otherCandidates)
+	sc, ip := p.pickOneConn(candidates)
 
 	rpcID := pickInfo.Ctx.Value(rpcIDKey).(uint64)
 	GetClientStatsHandler().setIdToIp(rpcID, ip)
@@ -226,25 +226,49 @@ func (p *allocatorPicker) getGroupConn(groupName string) []connInfo {
 
 // pickOneConn 选择一个连接，先排序，然后优先发满一个目标，再发满下一个
 // 优先发满定义：没有排队，且运行数最大
-func (p *allocatorPicker) pickOneConn(candidates []connInfo, otherCandidates []connInfo) (balancer.SubConn, string) {
-	var index int
-	// 1.如果本组有容器没到最大并发度，优先发满
-	index = findMaxRunningCountIndex(candidates)
-	// index != -1 说明有非阻塞的容器
-	if index != -1 {
-		return p.connInfos[index].sc, p.connInfos[index].addr
+//func (p *allocatorPicker) pickOneConn(candidates []connInfo, otherCandidates []connInfo) (balancer.SubConn, string) {
+//	var index int
+//	// 1.如果本组有容器没到最大并发度，优先发满
+//	index = findMaxRunningCountIndex(candidates)
+//	// index != -1 说明有非阻塞的容器
+//	if index != -1 {
+//		return p.connInfos[index].sc, p.connInfos[index].addr
+//	}
+//
+//	// 2.如果本组的满了，其他组的没满，从其他组里选一个发送，借用资源。选择一个非阻塞且 running 数最少的
+//	index = findMinRunningCountIndex(otherCandidates)
+//	// index != -1 说明有非阻塞的容器
+//	if index != -1 {
+//		return p.connInfos[index].sc, p.connInfos[index].addr
+//	}
+//
+//	// 3.如果都满了，在本组内选择排队数最少的目标发送
+//	// 每个容器最大并发度可能不同，因此满载时 running 数可能不同，不能根据 running 数的大小来选择，可能会挤爆最大并发度最小的容器
+//	index = findMinWaitingCountIndex(candidates)
+//	return p.connInfos[index].sc, p.connInfos[index].addr
+//}
+
+// pickOneConn 选择一个连接，挑选 load 最小的
+// 用轮询算法可能有问题，因为遍历 map 每次都是无序的，没有固定的顺序。因此同一种请求，返回的 candidates 列表也可能顺序不同
+func (p *allocatorPicker) pickOneConn(candidates []connInfo) (balancer.SubConn, string) {
+	// 初始化最小 load 和对应的元素下标
+	minLoad := candidates[0].load
+	minLoadIndex := 0
+
+	// 找到最小 load 和对应的下标
+	for i, info := range candidates {
+		if info.load < minLoad {
+			minLoad = info.load
+			minLoadIndex = i
+		}
 	}
 
-	// 2.如果本组的满了，其他组的没满，从其他组里选一个发送，借用资源。选择一个非阻塞且 running 数最少的
-	index = findMinRunningCountIndex(otherCandidates)
-	// index != -1 说明有非阻塞的容器
-	if index != -1 {
-		return p.connInfos[index].sc, p.connInfos[index].addr
-	}
+	// 更新 load，load += 1
+	// 获取目标在 connInfos 中的下标
+	index := candidates[minLoadIndex].index
 
-	// 3.如果都满了，在本组内选择排队数最少的目标发送
-	// 每个容器最大并发度可能不同，因此满载时 running 数可能不同，不能根据 running 数的大小来选择，可能会挤爆最大并发度最小的容器
-	index = findMinWaitingCountIndex(candidates)
+	p.connInfos[index].load += 1
+
 	return p.connInfos[index].sc, p.connInfos[index].addr
 }
 
@@ -420,9 +444,9 @@ func (p *allocatorBFPicker) Pick(pickInfo balancer.PickInfo) (balancer.PickResul
 	groupingField[functionTypeKey] = append(groupingField[functionTypeKey], functionName)
 
 	// 获取所有候选者连接
-	candidates, otherCandidates := p.selectConn(groupingField)
+	candidates, _ := p.selectConn(groupingField)
 	// 从候选者连接中，选择一个连接
-	sc, ip := p.pickOneConn(candidates, otherCandidates)
+	sc, ip := p.pickOneConn(candidates)
 
 	rpcID := pickInfo.Ctx.Value(rpcIDKey).(uint64)
 	GetClientStatsHandler().setIdToIp(rpcID, ip)
@@ -506,25 +530,49 @@ func (p *allocatorBFPicker) getGroupConn(groupName string) []connInfo {
 
 // pickOneConn 选择一个连接，先排序，然后优先发满一个目标，再发满下一个
 // 优先发满定义：没有排队，且运行数最大
-func (p *allocatorBFPicker) pickOneConn(candidates []connInfo, otherCandidates []connInfo) (balancer.SubConn, string) {
-	var index int
-	// 1.如果本组有容器没到最大并发度，优先发满
-	index = findMaxRunningCountIndex(candidates)
-	// index != -1 说明有非阻塞的容器
-	if index != -1 {
-		return p.connInfos[index].sc, p.connInfos[index].addr
+//func (p *allocatorBFPicker) pickOneConn(candidates []connInfo, otherCandidates []connInfo) (balancer.SubConn, string) {
+//	var index int
+//	// 1.如果本组有容器没到最大并发度，优先发满
+//	index = findMaxRunningCountIndex(candidates)
+//	// index != -1 说明有非阻塞的容器
+//	if index != -1 {
+//		return p.connInfos[index].sc, p.connInfos[index].addr
+//	}
+//
+//	// 2.如果本组的满了，其他组的没满，从其他组里选一个发送，借用资源。选择一个非阻塞且 running 数最少的
+//	index = findMinRunningCountIndex(otherCandidates)
+//	// index != -1 说明有非阻塞的容器
+//	if index != -1 {
+//		return p.connInfos[index].sc, p.connInfos[index].addr
+//	}
+//
+//	// 3.如果都满了，在本组内选择排队数最少的目标发送
+//	// 每个容器最大并发度可能不同，因此满载时 running 数可能不同，不能根据 running 数的大小来选择，可能会挤爆最大并发度最小的容器
+//	index = findMinWaitingCountIndex(candidates)
+//	return p.connInfos[index].sc, p.connInfos[index].addr
+//}
+
+// pickOneConn 选择一个连接，挑选 load 最小的
+// 用轮询算法可能有问题，因为遍历 map 每次都是无序的，没有固定的顺序。因此同一种请求，返回的 candidates 列表也可能顺序不同
+func (p *allocatorBFPicker) pickOneConn(candidates []connInfo) (balancer.SubConn, string) {
+	// 初始化最小 load 和对应的元素下标
+	minLoad := candidates[0].load
+	minLoadIndex := 0
+
+	// 找到最小 load 和对应的下标
+	for i, info := range candidates {
+		if info.load < minLoad {
+			minLoad = info.load
+			minLoadIndex = i
+		}
 	}
 
-	// 2.如果本组的满了，其他组的没满，从其他组里选一个发送，借用资源。选择一个非阻塞且 running 数最少的
-	index = findMinRunningCountIndex(otherCandidates)
-	// index != -1 说明有非阻塞的容器
-	if index != -1 {
-		return p.connInfos[index].sc, p.connInfos[index].addr
-	}
+	// 更新 load，load += 1
+	// 获取目标在 connInfos 中的下标
+	index := candidates[minLoadIndex].index
 
-	// 3.如果都满了，在本组内选择排队数最少的目标发送
-	// 每个容器最大并发度可能不同，因此满载时 running 数可能不同，不能根据 running 数的大小来选择，可能会挤爆最大并发度最小的容器
-	index = findMinWaitingCountIndex(candidates)
+	p.connInfos[index].load += 1
+
 	return p.connInfos[index].sc, p.connInfos[index].addr
 }
 

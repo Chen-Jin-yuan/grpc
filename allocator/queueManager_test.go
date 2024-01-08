@@ -20,7 +20,7 @@ import (
 )
 
 func TestCount(t *testing.T) {
-	go initServer(5e9, 2)
+	go initServer(10e9, 2)
 	time.Sleep(1e9)
 	go initClient(1e9)
 	time.Sleep(5e8)
@@ -46,8 +46,8 @@ func initClient(rate int) {
 	conn, err := Dial(
 		svcname,
 		// 路径从项目根路径开始，
-		WithBalancer(consulClient, "config.json", 10001),
-		WithStatsHandler(),
+		WithBalancerBF(consulClient, "configBF.json", 10001),
+		WithStatsHandlerBF(),
 	)
 	//conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
@@ -58,12 +58,12 @@ func initClient(rate int) {
 	time.Sleep(1e9)
 	id := 0
 	for {
-		md := metadata.Pairs("request-type", "hello1")
+		md := metadata.Pairs("request-type", "v1")
 		ctx := metadata.NewOutgoingContext(context.Background(), md)
 		go hello(&c, ctx, id)
-		md = metadata.Pairs("request-type", "helloAgain2")
-		ctx = metadata.NewOutgoingContext(context.Background(), md)
-		go helloAgain(&c, ctx, id)
+		//md = metadata.Pairs("request-type", "helloAgain2")
+		//ctx = metadata.NewOutgoingContext(context.Background(), md)
+		//go helloAgain(&c, ctx, id)
 		id += 1
 		time.Sleep(time.Duration(rate))
 	}
@@ -93,6 +93,7 @@ func initServer(rate int, maxStreams uint32) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	startServer(client, 50000, "50000", &wg, maxStreams, rate)
+	time.Sleep(10e9)
 	startServer(client, 50001, "50001", &wg, maxStreams, rate)
 	startServer(client, 50002, "50002", &wg, maxStreams, rate)
 	startServer(client, 50003, "50003", &wg, maxStreams, rate)
