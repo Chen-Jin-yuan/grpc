@@ -11,7 +11,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"log"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,9 +19,16 @@ import (
 )
 
 func TestCount(t *testing.T) {
-	go initServer(10e9, 2)
+	configMap["helloServer"] = []ServiceEndpoint{
+		{IP: "127.0.0.1:50000", Weight: 0.2},
+		{IP: "127.0.0.1:50001", Weight: 0.8},
+	}
+	configMap["exam_svc2"] = []ServiceEndpoint{
+		{IP: "1.0.0.2:1", Weight: 1},
+	}
+	go initServer(0e9)
 	time.Sleep(1e9)
-	go initClient(1e9)
+	go initClient(1e8)
 	time.Sleep(5e8)
 
 	for {
@@ -46,7 +52,7 @@ func initClient(rate int) {
 	conn, err := Dial(
 		svcname,
 		// 路径从项目根路径开始，
-		WithBalancerBF(consulClient, "configBF.json", 10001),
+		WithBalancer(consulClient, 10001),
 		WithStatsHandlerBF(),
 	)
 	//conn, err := grpc.Dial(*addr, grpc.WithInsecure())
@@ -55,7 +61,7 @@ func initClient(rate int) {
 	}
 	defer conn.Close()
 	c := pb.NewGreeterClient(conn)
-	time.Sleep(1e9)
+	time.Sleep(20e9)
 	id := 0
 	for {
 		md := metadata.Pairs("request-type", "v1")
@@ -84,7 +90,7 @@ func helloAgain(c *pb.GreeterClient, ctx context.Context, id int) {
 	log.Printf("Greeting: %s", r2.GetMessage())
 }
 
-func initServer(rate int, maxStreams uint32) {
+func initServer(rate int) {
 	consulAddr := "127.0.0.1:8500"
 	client, err := consul.NewClient(consulAddr)
 	if err != nil {
@@ -92,21 +98,20 @@ func initServer(rate int, maxStreams uint32) {
 	}
 	var wg sync.WaitGroup
 	wg.Add(2)
-	startServer(client, 50000, "50000", &wg, maxStreams, rate)
-	time.Sleep(10e9)
-	startServer(client, 50001, "50001", &wg, maxStreams, rate)
-	startServer(client, 50002, "50002", &wg, maxStreams, rate)
-	startServer(client, 50003, "50003", &wg, maxStreams, rate)
+	startServer(client, 50000, "50000", &wg, rate)
+	startServer(client, 50001, "50001", &wg, rate)
+	startServer(client, 50002, "50002", &wg, rate)
+	startServer(client, 50003, "50003", &wg, rate)
 	wg.Wait()
 }
-func startServer(client *consul.Client, port int, sid string, wg *sync.WaitGroup, maxStreams uint32, r int) {
+func startServer(client *consul.Client, port int, sid string, wg *sync.WaitGroup, r int) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	serverIns := server{c: client, id: sid, rate: r}
 
-	s := grpc.NewServer(grpc.MaxConcurrentStreams(maxStreams))
+	s := grpc.NewServer()
 	pb.RegisterGreeterServer(s, &serverIns)
 
 	err = client.Register("helloServer", sid, "127.0.0.1", port)
@@ -149,33 +154,13 @@ func (s *server) SayHelloAgain(ctx context.Context, in *pb.HelloAgainRequest) (*
 type DialOption func(name string) (grpc.DialOption, error)
 
 // WithBalancer 启用客户端负载均衡
-func WithBalancer(client *consul.Client, configPath string, allocatorPort int) DialOption {
+func WithBalancer(client *consul.Client, allocatorPort int) DialOption {
 	return func(name string) (grpc.DialOption, error) {
 		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
 		consul.InitResolver(client)
-		// 如果文件不存在，使用轮询策略
-		_, err := os.Stat(configPath)
-		if os.IsNotExist(err) {
-			return grpc.WithBalancerName(roundrobin.Name), nil
-		}
 		// 使用 allocator
-		Init(configPath, allocatorPort)
+		Init(allocatorPort)
 		return grpc.WithBalancerName(Name), nil
-	}
-}
-
-func WithBalancerBF(client *consul.Client, configPath string, allocatorPort int) DialOption {
-	return func(name string) (grpc.DialOption, error) {
-		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
-		consul.InitResolver(client)
-		// 如果文件不存在，使用轮询策略
-		_, err := os.Stat(configPath)
-		if os.IsNotExist(err) {
-			return grpc.WithBalancerName(roundrobin.Name), nil
-		}
-		// 使用 allocator
-		InitBF(configPath, allocatorPort)
-		return grpc.WithBalancerName(NameBF), nil
 	}
 }
 

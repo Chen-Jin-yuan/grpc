@@ -1,1 +1,0 @@
-{"group1":{"addresses":["1.0.0.1:1","1.0.0.2:1","1.0.0.3:1"],"weight":null},"group2":{"addresses":["1.0.0.5:1","1.0.0.4:1"],"weight":null},"group3":{"addresses":["1.0.0.6:1","1.0.0.7:1"],"weight":null}}

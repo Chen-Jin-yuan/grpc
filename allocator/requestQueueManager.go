@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"sync"
 )
@@ -252,57 +251,57 @@ func (h *ClientStatsHandler) HandleRPC(ctx context.Context, s stats.RPCStats) {
 	//case *stats.End:
 
 	//case *stats.InHeader:
-
+	//单纯为了 id->ip表不会太大
 	case *stats.InPayload:
 		if h.isCountFunc {
-			functionName := defaultFunctionName
+			//functionName := defaultFunctionName
 			rpcID := ctx.Value(rpcIDKey).(uint64)
-			target := h.getIdToIpAndDelete(rpcID)
-			functionName = h.getIdToFuncNameAndDelete(rpcID)
-			h.decRunningRequests(target, functionName)
+			_ = h.getIdToIpAndDelete(rpcID)
+			//functionName = h.getIdToFuncNameAndDelete(rpcID)
+			//h.decRunningRequests(target, functionName)
 		} else {
-			requestType := defaultRequestType
+			//requestType := defaultRequestType
 			// 从 gRPC context 中提取 metadata
-			md, ok := metadata.FromOutgoingContext(ctx)
-			if ok {
-				reqType := md.Get(mdRequestTypeKey)
-				if len(reqType) > 0 {
-					requestType = reqType[0]
-				}
-			}
+			//md, ok := metadata.FromOutgoingContext(ctx)
+			//if ok {
+			//	reqType := md.Get(mdRequestTypeKey)
+			//	if len(reqType) > 0 {
+			//		requestType = reqType[0]
+			//	}
+			//}
 			rpcID := ctx.Value(rpcIDKey).(uint64)
-			target := h.getIdToIpAndDelete(rpcID)
-			h.decRunningRequests(target, requestType)
+			_ = h.getIdToIpAndDelete(rpcID)
+			//h.decRunningRequests(target, requestType)
 		}
 
-	//case *stats.InTrailer:
-	//	fmt.Println("handlerRPC InTrailer...")
-	//case *stats.OutHeader:
-	//	fmt.Println("handlerRPC OutHeader...")
-	case *stats.OutPayload:
-		if h.isCountFunc {
-			functionName := defaultFunctionName
-			rpcID := ctx.Value(rpcIDKey).(uint64)
-			target := h.getIdToIp(rpcID)
-			functionName = h.getIdToFuncName(rpcID)
-			h.decWaitingRequests(target, functionName)
-			h.incRunningRequests(target, functionName)
-		} else {
-			requestType := defaultRequestType
-			// 从 gRPC context 中提取 metadata
-			md, ok := metadata.FromOutgoingContext(ctx)
-			if ok {
-				reqType := md.Get(mdRequestTypeKey)
-				if len(reqType) > 0 {
-					requestType = reqType[0]
-				}
-			}
-
-			rpcID := ctx.Value(rpcIDKey).(uint64)
-			target := h.getIdToIp(rpcID)
-			h.decWaitingRequests(target, requestType)
-			h.incRunningRequests(target, requestType)
-		}
+		//case *stats.InTrailer:
+		//	fmt.Println("handlerRPC InTrailer...")
+		//case *stats.OutHeader:
+		//	fmt.Println("handlerRPC OutHeader...")
+		//case *stats.OutPayload:
+		//	if h.isCountFunc {
+		//		functionName := defaultFunctionName
+		//		rpcID := ctx.Value(rpcIDKey).(uint64)
+		//		target := h.getIdToIp(rpcID)
+		//		functionName = h.getIdToFuncName(rpcID)
+		//		//h.decWaitingRequests(target, functionName)
+		//		h.incRunningRequests(target, functionName)
+		//	} else {
+		//		requestType := defaultRequestType
+		//		// 从 gRPC context 中提取 metadata
+		//		md, ok := metadata.FromOutgoingContext(ctx)
+		//		if ok {
+		//			reqType := md.Get(mdRequestTypeKey)
+		//			if len(reqType) > 0 {
+		//				requestType = reqType[0]
+		//			}
+		//		}
+		//
+		//		rpcID := ctx.Value(rpcIDKey).(uint64)
+		//		target := h.getIdToIp(rpcID)
+		//		//h.decWaitingRequests(target, requestType)
+		//		h.incRunningRequests(target, requestType)
+		//	}
 	}
 }
 
