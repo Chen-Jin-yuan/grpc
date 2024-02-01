@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/Chen-Jin-yuan/grpc/allocator"
 	"google.golang.org/grpc/balancer/roundrobin"
-	"os"
 	"strings"
 	"time"
 
@@ -26,34 +25,15 @@ func WithTracer(tracer opentracing.Tracer) DialOption {
 	}
 }
 
-// WithBalancer 启用客户端负载均衡，如果配置文件没有问题则
-func WithBalancer(client *consul.Client, configPath string, allocatorPort int) DialOption {
+// WithBalancer 启用客户端负载均衡
+func WithBalancer(client *consul.Client, allocatorPort int) DialOption {
 	return func(name string) (grpc.DialOption, error) {
 		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
 		consul.InitResolver(client)
-		// 如果文件不存在，使用轮询策略
-		_, err := os.Stat(configPath)
-		if os.IsNotExist(err) {
-			return grpc.WithBalancerName(roundrobin.Name), nil
-		}
-		// 使用 allocator
-		allocator.Init(configPath, allocatorPort)
-		return grpc.WithBalancerName(allocator.Name), nil
-	}
-}
 
-func WithBalancerBF(client *consul.Client, configPath string, allocatorPort int) DialOption {
-	return func(name string) (grpc.DialOption, error) {
-		// 借助 consul 的服务注册与服务发现机制，执行负载均衡
-		consul.InitResolver(client)
-		// 如果文件不存在，使用轮询策略
-		_, err := os.Stat(configPath)
-		if os.IsNotExist(err) {
-			return grpc.WithBalancerName(roundrobin.Name), nil
-		}
 		// 使用 allocator
-		allocator.InitBF(configPath, allocatorPort)
-		return grpc.WithBalancerName(allocator.NameBF), nil
+		allocator.Init(allocatorPort)
+		return grpc.WithBalancerName(allocator.Name), nil
 	}
 }
 
@@ -69,14 +49,6 @@ func WithBalancerRR(client *consul.Client) DialOption {
 // WithStatsHandler 返回客户端拦截器
 func WithStatsHandler() DialOption {
 	return func(name string) (grpc.DialOption, error) {
-		return grpc.WithStatsHandler(allocator.GetClientStatsHandler()), nil
-	}
-}
-
-// WithStatsHandlerBF 返回客户端拦截器
-func WithStatsHandlerBF() DialOption {
-	return func(name string) (grpc.DialOption, error) {
-		allocator.GetClientStatsHandler().SetIsCountFunc()
 		return grpc.WithStatsHandler(allocator.GetClientStatsHandler()), nil
 	}
 }
